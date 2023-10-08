@@ -26,3 +26,4 @@ Opens up a floating window with your buffers.
 
 Press enter to select a buffer or press `dd` or `D` to delete a buffer.
 
+![](bafa.gif)
