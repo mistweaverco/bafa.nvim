@@ -1,4 +1,3 @@
-local popup = require('plenary.popup')
 local buffer_utils = require('bafa.utils.buffers')
 
 Bafa_win_id = nil
@@ -13,23 +12,19 @@ end
 local function create_window()
   local width = 60
   local height = 10
-  local borderchars = { "─", "│", "─", "│", "╭", "╮", "╯", "╰" }
   local bufnr = vim.api.nvim_create_buf(false, false)
 
-  local Bafa_win_id, win = popup.create(bufnr, {
-    title = "Bafa",
-    highlight = "BafaWindow",
-    line = math.floor(((vim.o.lines - height) / 2) - 1),
-    col = math.floor((vim.o.columns - width) / 2),
-    minwidth = width,
-    minheight = height,
-    borderchars = borderchars,
-  })
-
-  vim.api.nvim_win_set_option(
-    win.border.win_id,
-    "winhl",
-    "Normal:BafaBorder"
+  Bafa_win_id = vim.api.nvim_open_win(
+    bufnr,
+    true,
+    {
+      relative = "editor",
+      width = width,
+      height = height,
+      row = math.floor(((vim.o.lines - height) / 2) - 1),
+      col = math.floor((vim.o.columns - width) / 2),
+      style = "minimal",
+    }
   )
 
   return {

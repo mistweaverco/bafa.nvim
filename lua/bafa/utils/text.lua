@@ -1,10 +1,4 @@
-local Path = require("plenary.path")
-
 local M = {}
-
-function M.project_key()
-    return vim.loop.cwd()
-end
 
 M.get_base_path_from_file_path = function(file_path)
   local base_path = file_path:match("(.*/)")
@@ -17,7 +11,9 @@ M.get_file_name_from_file_path = function(file_path)
 end
 
 M.get_normalized_path = function(item)
-  return Path:new(item):make_relative(M.project_key())
+  local current_working_directory = vim.fn.getcwd()
+  local relative_path = item:gsub(current_working_directory, ""):sub(2)
+  return relative_path
 end
 
 return M

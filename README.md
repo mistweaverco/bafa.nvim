@@ -5,7 +5,6 @@ Minimal BufExplorer alternative.
 ## Requirements
 
 - [Neovim](https://github.com/neovim/neovim) (tested with 0.9.0)
-- [plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
 
 ## Installation
 
@@ -14,7 +13,7 @@ Via [lazy.nvim](https://github.com/folke/lazy.nvim):
 ```lua
 require('lazy').setup({
   -- Buffer management
-  { 'mistweaverco/bafa.nvim', dependencies = 'nvim-lua/plenary.nvim' },
+  { 'mistweaverco/bafa.nvim' },
 })
 ```
 
