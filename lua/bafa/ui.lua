@@ -18,7 +18,10 @@ local function create_window()
     bufnr,
     true,
     {
+      title = "Bafa",
+      title_pos = "center",
       relative = "editor",
+      border = "rounded",
       width = width,
       height = height,
       row = math.floor(((vim.o.lines - height) / 2) - 1),
