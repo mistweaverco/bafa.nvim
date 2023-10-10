@@ -18,9 +18,11 @@ local function create_window()
   local bufnr = vim.api.nvim_create_buf(false, false)
 
   local max_width = vim.api.nvim_win_get_width(0)
+  local max_height = vim.api.nvim_win_get_height(0)
   local buffer_longest_name_width = buffer_utils.get_width_longest_buffer_name()
+  local buffer_lines = buffer_utils.get_lines_buffer_names()
   local width = math.min(max_width, buffer_longest_name_width + 10)
-  local height = 10
+  local height = math.min(max_height, buffer_lines + 2)
 
   BAFA_WIN_ID = vim.api.nvim_open_win(
     bufnr,

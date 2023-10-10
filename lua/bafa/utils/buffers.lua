@@ -26,6 +26,12 @@ M.get_width_longest_buffer_name = function()
   return longest_buffer_name
 end
 
+M.get_lines_buffer_names = function()
+  local buffers = M.get_buffers_as_table()
+  return #buffers
+end
+
+
 M.get_buffer_by_index = function(buffer_index)
   local buffer_numbers = M.get_buffers_as_table()
   local buffer = buffer_numbers[buffer_index]
