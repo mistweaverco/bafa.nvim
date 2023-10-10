@@ -1,12 +1,15 @@
 local buffer_utils = require('bafa.utils.buffers')
+local constants = require('bafa.constants')
 
-Bafa_win_id = nil
-Bafa_bufh = nil
+BAFA_NS_ID = vim.api.nvim_create_namespace('bafa.nvim')
+
+BAFA_WIN_ID = nil
+BAFA_BUF_ID = nil
 
 local function close_window()
-  vim.api.nvim_win_close(Bafa_win_id, true)
-  Bafa_win_id = nil
-  Bafa_bufh = nil
+  vim.api.nvim_win_close(BAFA_WIN_ID, true)
+  BAFA_WIN_ID = nil
+  BAFA_BUF_ID = nil
 end
 
 local function create_window()
@@ -14,7 +17,7 @@ local function create_window()
   local height = 10
   local bufnr = vim.api.nvim_create_buf(false, false)
 
-  Bafa_win_id = vim.api.nvim_open_win(
+  BAFA_WIN_ID = vim.api.nvim_open_win(
     bufnr,
     true,
     {
@@ -30,11 +33,11 @@ local function create_window()
     }
   )
 
-  vim.api.nvim_win_set_option(Bafa_win_id, "winhighlight", "NormalFloat:BafaBorder")
+  vim.api.nvim_win_set_option(BAFA_WIN_ID, "winhighlight", "NormalFloat:BafaBorder")
 
   return {
     bufnr = bufnr,
-    win_id = Bafa_win_id,
+    win_id = BAFA_WIN_ID,
   }
 end
 
@@ -66,7 +69,7 @@ function M.delete_menu_item()
   end
   vim.api.nvim_buf_delete(selected_buffer.number, { force = true })
   vim.api.nvim_buf_set_lines(
-    Bafa_bufh,
+    BAFA_BUF_ID,
     selected_line_number - 1,
     selected_line_number,
     false,
@@ -79,59 +82,69 @@ function M.on_menu_save()
 end
 
 function M.toggle()
-  if Bafa_win_id ~= nil and vim.api.nvim_win_is_valid(Bafa_win_id) then
+  if BAFA_WIN_ID ~= nil and vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
     close_window()
     return
   end
 
+  local modified_lines = {}
   local win_info = create_window()
   local contents = {}
 
-  Bafa_win_id = win_info.win_id
-  Bafa_bufh = win_info.bufnr
+  BAFA_WIN_ID = win_info.win_id
+  BAFA_BUF_ID = win_info.bufnr
   local valid_buffers = buffer_utils.get_buffers_as_table()
 
   for idx, buffer in ipairs(valid_buffers) do
-    local is_modified = buffer.is_modified and "[+] " or ""
-    contents[idx] = string.format("%s%s", is_modified, buffer.name)
+    if buffer.is_modified then
+      table.insert(modified_lines, idx)
+    end
+    contents[idx] = string.format("%s", buffer.name)
   end
 
-  vim.api.nvim_win_set_option(Bafa_win_id, "number", true)
-  vim.api.nvim_buf_set_name(Bafa_bufh, "bafa-menu")
-  vim.api.nvim_buf_set_lines(Bafa_bufh, 0, #contents, false, contents)
-  vim.api.nvim_buf_set_option(Bafa_bufh, "filetype", "bafa")
-  vim.api.nvim_buf_set_option(Bafa_bufh, "buftype", "acwrite")
-  vim.api.nvim_buf_set_option(Bafa_bufh, "bufhidden", "delete")
+  vim.api.nvim_win_set_option(BAFA_WIN_ID, "number", true)
+  vim.api.nvim_buf_set_name(BAFA_BUF_ID, "bafa-menu")
+  vim.api.nvim_buf_set_lines(BAFA_BUF_ID, 0, #contents, false, contents)
+  vim.api.nvim_buf_set_option(BAFA_BUF_ID, "filetype", "bafa")
+  vim.api.nvim_buf_set_option(BAFA_BUF_ID, "buftype", "acwrite")
+  vim.api.nvim_buf_set_option(BAFA_BUF_ID, "bufhidden", "delete")
+
+  for _, line_number in ipairs(modified_lines) do
+    vim.api.nvim_buf_set_extmark(BAFA_BUF_ID, BAFA_NS_ID, line_number - 1, 0, {
+      virt_text = { { constants.icons.modified } },
+    })
+  end
+
   vim.api.nvim_buf_set_keymap(
-    Bafa_bufh,
+    BAFA_BUF_ID,
     "n",
     "q",
     "<Cmd>lua require('bafa.ui').toggle()<CR>",
     { silent = true }
   )
   vim.api.nvim_buf_set_keymap(
-    Bafa_bufh,
+    BAFA_BUF_ID,
     "n",
     "<ESC>",
     "<Cmd>lua require('bafa.ui').toggle()<CR>",
     { silent = true }
   )
   vim.api.nvim_buf_set_keymap(
-    Bafa_bufh,
+    BAFA_BUF_ID,
     "n",
     "<CR>",
     "<Cmd>lua require('bafa.ui').select_menu_item()<CR>",
     {}
   )
   vim.api.nvim_buf_set_keymap(
-    Bafa_bufh,
+    BAFA_BUF_ID,
     "n",
     "dd",
     "<Cmd>lua require('bafa.ui').delete_menu_item()<CR>",
     {}
   )
   vim.api.nvim_buf_set_keymap(
-    Bafa_bufh,
+    BAFA_BUF_ID,
     "n",
     "D",
     "<Cmd>lua require('bafa.ui').delete_menu_item()<CR>",
@@ -140,13 +153,13 @@ function M.toggle()
   vim.cmd(
     string.format(
       "autocmd BufWriteCmd <buffer=%s> lua require('bafa.ui').on_menu_save()",
-      Bafa_bufh
+      BAFA_BUF_ID
     )
   )
   vim.cmd(
     string.format(
       "autocmd BufModifiedSet <buffer=%s> set nomodified",
-      Bafa_bufh
+      BAFA_BUF_ID
     )
   )
   vim.cmd(
