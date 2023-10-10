@@ -10,11 +10,37 @@ Minimal BufExplorer alternative.
 
 Via [lazy.nvim](https://github.com/folke/lazy.nvim):
 
+
+### Simple configuration
+
 ```lua
 require('lazy').setup({
   -- Buffer management
   { 'mistweaverco/bafa.nvim' },
 })
+```
+
+### Advanced configuration
+
+```lua
+require('lazy').setup({
+  -- Buffer management
+  {
+    'mistweaverco/bafa.nvim',
+    config = function()
+      require('bafa').setup({
+        width = 60,
+        height = 10,
+        title = "Bafa",
+        title_pos = "center",
+        relative = "editor",
+        border = "rounded",
+        style = "minimal",
+      })
+    end,
+  },
+})
+
 ```
 
 ## Public methods

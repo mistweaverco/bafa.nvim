@@ -1,10 +1,23 @@
 local buffer_utils = require('bafa.utils.buffers')
+local table_utils = require('bafa.utils.tables')
 
 local M = {}
 
-M.setup = function()
-  -- just a dummy function
-  -- in case we want to do something later
+BAFA_CONFIG = {
+  title = "Bafa",
+  title_pos = "center",
+  relative = "editor",
+  border = "rounded",
+  style = "minimal",
+}
+
+M.setup = function(config)
+  config = config or {}
+  BAFA_CONFIG = table_utils.merge_tables(BAFA_CONFIG, config)
+end
+
+M.get_config = function()
+  return BAFA_CONFIG
 end
 
 return M

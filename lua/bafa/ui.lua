@@ -1,3 +1,4 @@
+local bafa = require('bafa')
 local buffer_utils = require('bafa.utils.buffers')
 local constants = require('bafa.constants')
 
@@ -13,23 +14,25 @@ local function close_window()
 end
 
 local function create_window()
-  local width = 60
-  local height = 10
+  local bafa_config = bafa.get_config()
   local bufnr = vim.api.nvim_create_buf(false, false)
+
+  local width = vim.api.nvim_win_get_width(0)
+  local height = 10
 
   BAFA_WIN_ID = vim.api.nvim_open_win(
     bufnr,
     true,
     {
-      title = "Bafa",
-      title_pos = "center",
-      relative = "editor",
-      border = "rounded",
-      width = width,
-      height = height,
-      row = math.floor(((vim.o.lines - height) / 2) - 1),
-      col = math.floor((vim.o.columns - width) / 2),
-      style = "minimal",
+      title = bafa_config.title,
+      title_pos = bafa_config.title_pos,
+      relative = bafa_config.relative,
+      border = bafa_config.border,
+      width = bafa_config.width or width,
+      height = bafa_config.height or height,
+      row = math.floor(((vim.o.lines - (bafa_config.height or height)) / 2) - 1),
+      col = math.floor((vim.o.columns - (bafa_config.width or width)) / 2),
+      style = bafa_config.style,
     }
   )
 
@@ -43,8 +46,7 @@ end
 
 local M = {}
 
-function M.select_menu_item()
-  local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
+function M.select_menu_item() local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
   local selected_buffer = buffer_utils.get_buffer_by_index(selected_line_number)
   if selected_buffer == nil then
     return
