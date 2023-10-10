@@ -30,6 +30,8 @@ local function create_window()
     }
   )
 
+  vim.api.nvim_win_set_option(Bafa_win_id, "winhighlight", "NormalFloat:BafaBorder")
+
   return {
     bufnr = bufnr,
     win_id = Bafa_win_id,
