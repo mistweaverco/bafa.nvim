@@ -1,6 +1,8 @@
 local bafa = require('bafa')
 local buffer_utils = require('bafa.utils.buffers')
 local constants = require('bafa.constants')
+local keymaps = require('bafa.utils.keymaps')
+local autocmds = require('bafa.utils.autocmds')
 
 BAFA_NS_ID = vim.api.nvim_create_namespace('bafa.nvim')
 
@@ -121,56 +123,10 @@ function M.toggle()
     })
   end
 
-  vim.api.nvim_buf_set_keymap(
-    BAFA_BUF_ID,
-    "n",
-    "q",
-    "<Cmd>lua require('bafa.ui').toggle()<CR>",
-    { silent = true }
-  )
-  vim.api.nvim_buf_set_keymap(
-    BAFA_BUF_ID,
-    "n",
-    "<ESC>",
-    "<Cmd>lua require('bafa.ui').toggle()<CR>",
-    { silent = true }
-  )
-  vim.api.nvim_buf_set_keymap(
-    BAFA_BUF_ID,
-    "n",
-    "<CR>",
-    "<Cmd>lua require('bafa.ui').select_menu_item()<CR>",
-    {}
-  )
-  vim.api.nvim_buf_set_keymap(
-    BAFA_BUF_ID,
-    "n",
-    "dd",
-    "<Cmd>lua require('bafa.ui').delete_menu_item()<CR>",
-    {}
-  )
-  vim.api.nvim_buf_set_keymap(
-    BAFA_BUF_ID,
-    "n",
-    "D",
-    "<Cmd>lua require('bafa.ui').delete_menu_item()<CR>",
-    {}
-  )
-  vim.cmd(
-    string.format(
-      "autocmd BufWriteCmd <buffer=%s> lua require('bafa.ui').on_menu_save()",
-      BAFA_BUF_ID
-    )
-  )
-  vim.cmd(
-    string.format(
-      "autocmd BufModifiedSet <buffer=%s> set nomodified",
-      BAFA_BUF_ID
-    )
-  )
-  vim.cmd(
-    "autocmd BufLeave <buffer> ++nested ++once silent lua require('bafa.ui').toggle()"
-  )
+  keymaps.noop(BAFA_BUF_ID)
+  keymaps.defaults(BAFA_BUF_ID)
+  autocmds.defaults(BAFA_BUF_ID)
+
 end
 
 return M
