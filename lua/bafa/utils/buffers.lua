@@ -1,5 +1,4 @@
 local text_utils = require('bafa.utils.text')
-local cache = require('bafa.cache')
 
 local M = {}
 
@@ -46,11 +45,7 @@ M.get_buffer_by_index = function(buffer_index)
   return buffer
 end
 
-M.get_buffers_as_table = function(opts)
-  opts = opts or {}
-  if (cache.get("buffers") ~= nil and opts.force ~= true) then
-    return cache.get("buffers")
-  end
+M.get_buffers_as_table = function()
   local buffers = {}
   local buffer_numbers = vim.api.nvim_list_bufs()
   for _, buffer_number in ipairs(buffer_numbers) do
@@ -73,7 +68,6 @@ M.get_buffers_as_table = function(opts)
       end)
     end
   end
-  cache.set("buffers", buffers)
   return buffers
 end
 
