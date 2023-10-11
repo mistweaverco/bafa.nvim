@@ -99,7 +99,7 @@ function M.toggle()
 
   BAFA_WIN_ID = win_info.win_id
   BAFA_BUF_ID = win_info.bufnr
-  local valid_buffers = buffer_utils.get_buffers_as_table()
+  local valid_buffers = buffer_utils.get_buffers_as_table({ force = true })
 
   for idx, buffer in ipairs(valid_buffers) do
     if buffer.is_modified then
