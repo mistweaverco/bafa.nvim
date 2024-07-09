@@ -12,7 +12,7 @@ end
 
 M.get_normalized_path = function(item)
   local current_working_directory = vim.fn.getcwd()
-  local relative_path = item:gsub(current_working_directory, ""):sub(2)
+  local relative_path = vim.fn.fnamemodify(item, ":.")
   return relative_path
 end
 
