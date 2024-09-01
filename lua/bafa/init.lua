@@ -1,5 +1,5 @@
-local buffer_utils = require('bafa.utils.buffers')
-local table_utils = require('bafa.utils.tables')
+local buffer_utils = require("bafa.utils.buffers")
+local table_utils = require("bafa.utils.tables")
 
 local M = {}
 

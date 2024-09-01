@@ -1,10 +1,10 @@
-local bafa = require('bafa')
-local buffer_utils = require('bafa.utils.buffers')
-local constants = require('bafa.constants')
-local keymaps = require('bafa.utils.keymaps')
-local autocmds = require('bafa.utils.autocmds')
+local bafa = require("bafa")
+local buffer_utils = require("bafa.utils.buffers")
+local constants = require("bafa.constants")
+local keymaps = require("bafa.utils.keymaps")
+local autocmds = require("bafa.utils.autocmds")
 
-BAFA_NS_ID = vim.api.nvim_create_namespace('bafa.nvim')
+BAFA_NS_ID = vim.api.nvim_create_namespace("bafa.nvim")
 
 BAFA_WIN_ID = nil
 BAFA_BUF_ID = nil
@@ -26,21 +26,17 @@ local function create_window()
   local width = math.min(max_width, buffer_longest_name_width + 10)
   local height = math.min(max_height, buffer_lines + 2)
 
-  BAFA_WIN_ID = vim.api.nvim_open_win(
-    bufnr,
-    true,
-    {
-      title = bafa_config.title,
-      title_pos = bafa_config.title_pos,
-      relative = bafa_config.relative,
-      border = bafa_config.border,
-      width = bafa_config.width or width,
-      height = bafa_config.height or height,
-      row = math.floor(((vim.o.lines - (bafa_config.height or height)) / 2) - 1),
-      col = math.floor((vim.o.columns - (bafa_config.width or width)) / 2),
-      style = bafa_config.style,
-    }
-  )
+  BAFA_WIN_ID = vim.api.nvim_open_win(bufnr, true, {
+    title = bafa_config.title,
+    title_pos = bafa_config.title_pos,
+    relative = bafa_config.relative,
+    border = bafa_config.border,
+    width = bafa_config.width or width,
+    height = bafa_config.height or height,
+    row = math.floor(((vim.o.lines - (bafa_config.height or height)) / 2) - 1),
+    col = math.floor((vim.o.columns - (bafa_config.width or width)) / 2),
+    style = bafa_config.style,
+  })
 
   vim.api.nvim_win_set_option(BAFA_WIN_ID, "winhighlight", "NormalFloat:BafaBorder")
 
@@ -52,7 +48,8 @@ end
 
 local M = {}
 
-function M.select_menu_item() local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
+function M.select_menu_item()
+  local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
   local selected_buffer = buffer_utils.get_buffer_by_index(selected_line_number)
   if selected_buffer == nil then
     return
@@ -76,13 +73,7 @@ function M.delete_menu_item()
     return
   end
   vim.api.nvim_buf_delete(selected_buffer.number, { force = true })
-  vim.api.nvim_buf_set_lines(
-    BAFA_BUF_ID,
-    selected_line_number - 1,
-    selected_line_number,
-    false,
-    {}
-  )
+  vim.api.nvim_buf_set_lines(BAFA_BUF_ID, selected_line_number - 1, selected_line_number, false, {})
 end
 
 function M.on_menu_save()
@@ -126,7 +117,6 @@ function M.toggle()
   keymaps.noop(BAFA_BUF_ID)
   keymaps.defaults(BAFA_BUF_ID)
   autocmds.defaults(BAFA_BUF_ID)
-
 end
 
 return M

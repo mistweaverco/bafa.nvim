@@ -1,4 +1,4 @@
-local text_utils = require('bafa.utils.text')
+local text_utils = require("bafa.utils.text")
 
 local M = {}
 
@@ -30,7 +30,6 @@ M.get_lines_buffer_names = function()
   local buffers = M.get_buffers_as_table()
   return #buffers
 end
-
 
 M.get_buffer_by_index = function(buffer_index)
   local buffer_numbers = M.get_buffers_as_table()
