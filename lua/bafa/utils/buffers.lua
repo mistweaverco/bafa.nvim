@@ -4,10 +4,9 @@ local M = {}
 
 M.is_valid_buffer = function(buffer_number)
   local buffer_name = vim.api.nvim_buf_get_name(buffer_number)
-  local is_loaded = vim.api.nvim_buf_is_loaded(buffer_number)
-  local is_listed = vim.api.nvim_buf_get_option(buffer_number, "buflisted") == true
+  local is_listed = vim.bo[buffer_number].buflisted == true
   local is_not_bafa_buffer = buffer_name ~= "bafa-menu"
-  if buffer_name ~= "" and is_not_bafa_buffer and is_loaded and is_listed then
+  if buffer_name ~= "" and is_not_bafa_buffer and is_listed then
     return true
   end
   return false
@@ -53,7 +52,7 @@ M.get_buffers_as_table = function()
       local last_used = vim.fn.getbufinfo(buffer_number)[1].lastused
       local buffer_name = vim.api.nvim_buf_get_name(buffer_number)
       local buffer_file_name = text_utils.get_normalized_path(buffer_name) or "untitled"
-      local is_modified = vim.api.nvim_buf_get_option(buffer_number, "modified") == true
+      local is_modified = vim.bo[buffer_number].modified == true
       local buffer = {
         name = buffer_file_name,
         path = buffer_name,

@@ -6,6 +6,9 @@ M.defaults = {
   relative = "editor",
   border = "rounded",
   style = "minimal",
+  icons = {
+    modified = "",
+  },
 }
 
 M.options = M.defaults

@@ -57,6 +57,9 @@ require('lazy').setup({
         relative = "editor",
         border = "rounded",
         style = "minimal",
+        icons = {
+          modified = "",
+        },
       })
     end,
   },

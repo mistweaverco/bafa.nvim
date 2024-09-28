@@ -1,6 +1,5 @@
 local Config = require("bafa.config")
 local buffer_utils = require("bafa.utils.buffers")
-local constants = require("bafa.constants")
 local keymaps = require("bafa.utils.keymaps")
 local autocmds = require("bafa.utils.autocmds")
 
@@ -121,7 +120,7 @@ function M.toggle()
 
   for _, line_number in ipairs(modified_lines) do
     vim.api.nvim_buf_set_extmark(BAFA_BUF_ID, BAFA_NS_ID, line_number - 1, 0, {
-      virt_text = { { constants.icons.modified } },
+      virt_text = { { Config.get().icons.modified } },
     })
   end
 
