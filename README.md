@@ -19,7 +19,7 @@ It allows you to quickly switch between buffers and delete them.
 
 <p></p>
 
-![demo](bafa.gif)
+![demo](demo.png)
 
 <p></p>
 
@@ -28,6 +28,12 @@ It allows you to quickly switch between buffers and delete them.
 ## Requirements
 
 - [Neovim](https://github.com/neovim/neovim) (tested with 0.9.0)
+
+> [!TIP]
+> For having fancy icons, you need to install a patched font.
+> You can find some patched fonts in the [Nerd Fonts](https://www.nerdfonts.com/) website.
+> Also you should consider installing [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons)
+> for having the correct icons based on the ft in the buffer list.
 
 ## Install
 
@@ -48,20 +54,16 @@ require('lazy').setup({
   -- Buffer management
   {
     'mistweaverco/bafa.nvim',
-    config = function()
-      require('bafa').setup({
-        width = 60,
-        height = 10,
-        title = "Bafa",
-        title_pos = "center",
-        relative = "editor",
-        border = "rounded",
-        style = "minimal",
-        icons = {
-          modified = "",
-        },
-      })
-    end,
+    opts = {
+      width = 60,
+      height = 10,
+      title = "Bafa",
+      title_pos = "center",
+      relative = "editor",
+      border = "rounded",
+      style = "minimal",
+      diagnostics = true,
+    }
   },
 })
 
