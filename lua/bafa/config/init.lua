@@ -7,6 +7,8 @@ M.defaults = {
   border = "rounded",
   style = "minimal",
   diagnostics = true,
+  -- nil means use WarningMsg, or set to a highlight group name like "WarningMsg" or "DiffText"
+  modified_hl = nil,
 }
 
 M.options = M.defaults
