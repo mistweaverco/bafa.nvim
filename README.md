@@ -63,6 +63,8 @@ require('lazy').setup({
       border = "rounded",
       style = "minimal",
       diagnostics = true,
+      -- or "ErrorMsg", "WarningMsg", etc. -- Falls back to WarningMsg if the specified highlight group doesn't exist
+      modified_hl = "DiffChanged",
     }
   },
 })

@@ -46,7 +46,10 @@ local add_ft_icon_highlight = function(idx, buffer)
   local icon_hl = vim.api.nvim_get_hl(0, { name = icon_hl_group }).fg
   local hl_group = "BafaIcon" .. tostring(idx)
   vim.api.nvim_set_hl(0, hl_group, { fg = string.format("#%06x", icon_hl) })
-  vim.api.nvim_buf_add_highlight(BAFA_BUF_ID, BAFA_NS_ID, hl_group, idx - 1, 2, 3)
+  vim.api.nvim_buf_set_extmark(BAFA_BUF_ID, BAFA_NS_ID, idx - 1, 2, {
+    end_col = 3,
+    hl_group = hl_group,
+  })
 end
 
 --- Colors the buffer name if it is modified
@@ -59,14 +62,22 @@ local add_modified_highlight = function(idx, buffer)
   if not buffer.is_modified then
     return
   end
-  local hl_name = "BafaModified"
-  local hl = vim.api.nvim_get_hl(0, { name = hl_name, create = false })
-  local fg = "#ffff00"
-  if #hl ~= 0 then
-    fg = string.format("#%06x", hl.fg)
+  local bafa_config = Config.get()
+  local hl_name = bafa_config.modified_hl or "WarningMsg"
+
+  -- If using a custom highlight group name, ensure it exists or create BafaModified
+  if bafa_config.modified_hl then
+    local hl = vim.api.nvim_get_hl(0, { name = hl_name, create = false })
+    if #hl == 0 then
+      -- If the specified highlight group doesn't exist, fallback to WarningMsg
+      hl_name = "WarningMsg"
+    end
   end
-  vim.api.nvim_set_hl(0, hl_name, { fg = fg })
-  vim.api.nvim_buf_add_highlight(BAFA_BUF_ID, BAFA_NS_ID, hl_name, idx - 1, 4, -1)
+
+  -- Use extmark to highlight from column 4 to end of line
+  vim.api.nvim_buf_set_extmark(BAFA_BUF_ID, BAFA_NS_ID, idx - 1, 4, {
+    hl_group = hl_name,
+  })
 end
 
 ---Add diagnostics icons to the buffer line
@@ -204,7 +215,7 @@ local function create_window()
     style = bafa_config.style,
   })
 
-  vim.wo[BAFA_WIN_ID].winhighlight = "NormalFloat:BafaBorder"
+  -- NormalFloat will be used by default for floating windows, respecting user's theme
 
   return {
     bufnr = bufnr,
