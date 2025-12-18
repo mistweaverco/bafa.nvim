@@ -76,3 +76,8 @@ require('lazy').setup({
 Opens up a floating window with your buffers.
 
 Press enter to select a buffer or press `dd` or `D` to delete a buffer.
+
+Press `K` or `J` to move up and down the buffer list.
+
+Press `q` or `<ESC>` to close the window,
+without commiting any UI changes.
