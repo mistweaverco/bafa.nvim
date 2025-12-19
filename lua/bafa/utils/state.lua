@@ -8,9 +8,6 @@ local state = {
   history_index = 0, -- Current position in history
 }
 
--- Key for persisted buffer order in vim.g (persists via shada with '! flag)
-local PERSISTED_ORDER_KEY = "bafa_buffer_order"
-
 -- Deep copy a buffer list
 local function copy_buffer_list(buffers)
   local copy = {}
@@ -39,9 +36,20 @@ local function save_current_to_history()
   state.history_index = #state.history
 end
 
--- Get persisted order from vim.g (stores buffer paths, not numbers)
+--- Get persisted order from optional storage
+-- Note: Requires kikao.nvim to be installed for persistence
+-- See: https://github.com/mistweaverco/kikao.nvim
 local function get_persisted_order()
-  local order = vim.g[PERSISTED_ORDER_KEY]
+  -- check if plugin kikao.nvim is installed
+  -- and if so, get the persisted order from its storage
+  local kikao_ok, kikao_api = pcall(require, "kikao.api")
+  if not kikao_ok then
+    return {}
+  end
+  -- this will return nil if no value is stored
+  -- otherwise, it should be a table of buffer paths
+  -- like: { "/path/to/buf1", "/path/to/buf2", ... }
+  local order = kikao_api.get_value({ key = "buffer_order" })
   if order == nil or type(order) ~= "table" then
     return {}
   end
@@ -232,9 +240,10 @@ function M.get_available_buffers(all_buffers)
   return available
 end
 
--- Save current order as persisted order (stored in vim.g for shada persistence)
+-- Save current order as persisted order
 -- Stores buffer paths instead of numbers since numbers change between sessions
--- Note: Requires 'set shada+=!' in Neovim config for persistence across sessions
+-- Note: Requires kikao.nvim to be installed for persistence
+-- See: https://github.com/mistweaverco/kikao.nvim
 function M.save_order()
   local order = {}
   for _, buf in ipairs(state.working_buffers) do
@@ -243,7 +252,13 @@ function M.save_order()
       table.insert(order, buf.path)
     end
   end
-  vim.g[PERSISTED_ORDER_KEY] = order
+  -- check if plugin kikao.nvim is installed
+  -- and if so, save the persisted order to its storage
+  local kikao_ok, kikao_api = pcall(require, "kikao.api")
+  if not kikao_ok then
+    return
+  end
+  kikao_api.set_value({ key = "buffer_order", value = order })
 end
 
 return M
