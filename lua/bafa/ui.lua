@@ -15,6 +15,15 @@ local MAIN_WINDOW_WIDTH = vim.api.nvim_win_get_width(0)
 local DIAGNOSTICS_LABELS = { "Error", "Warn", "Info", "Hint" }
 local DIAGNOSTICS_SIGNS = { " ", " ", " ", " " }
 
+---@enum BAFA_SORTING
+local BafaSorting = {
+  LAST_USED = "last_used",
+  MANUAL = "manual",
+}
+
+---@type BAFA_SORTING
+local BAFA_CURRENT_SORTING = "last_used"
+
 local function get_diagnostics(bufnr)
   local count = vim.diagnostic.count(bufnr)
   local diags = {}
@@ -126,7 +135,8 @@ local function refresh_ui()
   -- Clear existing highlights and extmarks
   vim.api.nvim_buf_clear_namespace(BAFA_BUF_ID, BAFA_NS_ID, 0, -1)
 
-  local working_buffers = State.get_working_buffers()
+  local working_buffers = BAFA_CURRENT_SORTING == BafaSorting.LAST_USED and BufferUtils.get_buffers_as_table()
+    or State.get_working_buffers()
   local contents = {}
 
   for idx, buffer in ipairs(working_buffers) do
@@ -227,7 +237,7 @@ local M = {}
 
 function M.select_menu_item()
   local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
-  local selected_buffer = State.get_buffer_at_index(selected_line_number)
+  local selected_buffer = State.get_buffer_at_index(selected_line_number, BAFA_CURRENT_SORTING)
   if selected_buffer == nil then
     return
   end
@@ -280,6 +290,7 @@ function M.move_buffer_up()
   if State.move_buffer_up(selected_line_number) then
     refresh_ui()
     vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { selected_line_number - 1, 0 })
+    BAFA_CURRENT_SORTING = BafaSorting.MANUAL
   end
 end
 
@@ -293,41 +304,7 @@ function M.move_buffer_down()
   if State.move_buffer_down(selected_line_number) then
     refresh_ui()
     vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { selected_line_number + 1, 0 })
-  end
-end
-
--- Add buffer to list
-function M.add_buffer()
-  if BAFA_BUF_ID == nil or not vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then
-    return
-  end
-
-  -- Get all valid buffers
-  local all_buffers = BufferUtils.get_buffers_as_table()
-  local available = State.get_available_buffers(all_buffers)
-
-  if #available == 0 then
-    vim.notify("No additional buffers to add", vim.log.levels.INFO)
-    return
-  end
-
-  -- Create picker list
-  local choices = { "Select buffer to add:" }
-  for i, buf in ipairs(available) do
-    table.insert(choices, string.format("%d. %s", i, buf.name))
-  end
-
-  local choice = vim.fn.inputlist(choices)
-  if choice < 1 or choice > #available then
-    return
-  end
-
-  local selected = available[choice]
-  if State.add_buffer(selected) then
-    refresh_ui()
-    -- Move cursor to the newly added buffer
-    local working_buffers = State.get_working_buffers()
-    vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { #working_buffers, 0 })
+    BAFA_CURRENT_SORTING = BafaSorting.MANUAL
   end
 end
 
@@ -407,6 +384,11 @@ end
 
 -- Expose refresh_ui so it can be called from autocmds
 function M.refresh_ui()
+  refresh_ui()
+end
+
+function M.enable_default_sorting()
+  BAFA_CURRENT_SORTING = BafaSorting.LAST_USED
   refresh_ui()
 end
 

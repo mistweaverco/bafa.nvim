@@ -77,13 +77,16 @@ require('lazy').setup({
 
 Opens up a floating window with your buffers.
 
+The buffers are ordered by last usage time by default.
+
 Press enter to select a buffer or press `dd` or `D` to delete a buffer.
 
 Press `K` or `J` to move a buffer up or down the list.
+Once you move a buffer, the new order will be kept
+until you enable ordering by last usage time again (by pressing `o`).
+
 For persistent changes between sessions, consider using
 [kikao.nvim](https://github.com/mistweaverco/kikao.nvim).
-If you have this installed,
-the order of buffers will be persisted automatically.
 
 Press `q` or `<ESC>` to close the window,
 without commiting any UI changes.

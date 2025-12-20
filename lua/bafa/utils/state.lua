@@ -1,3 +1,4 @@
+local BufferUtils = require("bafa.utils.buffers")
 local M = {}
 
 -- State management for buffer operations
@@ -113,10 +114,16 @@ end
 function M.init(initial_buffers)
   -- Apply persisted order if available
   local ordered_buffers = apply_persisted_order(initial_buffers)
+  state.inital_buffers = initial_buffers
   state.original_buffers = copy_buffer_list(ordered_buffers)
   state.working_buffers = copy_buffer_list(ordered_buffers)
   state.history = { copy_buffer_list(ordered_buffers) }
   state.history_index = 1
+end
+
+---Get initial buffers
+function M.get_initial_buffers()
+  return state.inital_buffers
 end
 
 -- Get working buffers
@@ -190,7 +197,12 @@ function M.add_buffer(buffer)
 end
 
 -- Get buffer at index
-function M.get_buffer_at_index(idx)
+-- @param idx number: Index of the buffer to retrieve
+-- @param BafaSorting current_sorting: Current sorting method (not used here but kept for compatibility)
+function M.get_buffer_at_index(idx, current_sorting)
+  if current_sorting == "last_used" then
+    return BufferUtils.get_buffer_by_index(idx)
+  end
   return state.working_buffers[idx]
 end
 

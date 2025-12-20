@@ -38,9 +38,14 @@ function M.defaults(bufnr)
   vim.api.nvim_buf_set_keymap(bufnr, "n", "K", "<Cmd>lua require('bafa.ui').move_buffer_up()<CR>", { silent = true })
   -- Move buffer down (swap with next)
   vim.api.nvim_buf_set_keymap(bufnr, "n", "J", "<Cmd>lua require('bafa.ui').move_buffer_down()<CR>", { silent = true })
-  -- Add buffer
-  vim.api.nvim_buf_set_keymap(bufnr, "n", "a", "<Cmd>lua require('bafa.ui').add_buffer()<CR>", { silent = true })
-  vim.api.nvim_buf_set_keymap(bufnr, "n", "A", "<Cmd>lua require('bafa.ui').add_buffer()<CR>", { silent = true })
+  -- Enable default by last usage sorting again
+  vim.api.nvim_buf_set_keymap(
+    bufnr,
+    "n",
+    "o",
+    "<Cmd>lua require('bafa.ui').enable_default_sorting()<CR>",
+    { silent = true }
+  )
   -- Undo
   vim.api.nvim_buf_set_keymap(bufnr, "n", "u", "<Cmd>lua require('bafa.ui').undo()<CR>", { silent = true })
   -- Redo
