@@ -283,30 +283,41 @@ end
 ---Move buffer up (K key - visual up means line moves up)
 ---@returns nil
 function M.move_buffer_up()
+  if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
+    return
+  end
   if BAFA_BUF_ID == nil or not vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then
     return
   end
 
+  --- Ensure sorting is manual when moving
+  M.toggle_sorting(Types.BafaSorting.MANUAL)
   local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
   if State.move_buffer_up(selected_line_number) then
     refresh_ui()
     vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { selected_line_number - 1, 0 })
-    BAFA_CURRENT_SORTING = Types.BafaSorting.MANUAL
   end
 end
 
 ---Move buffer down (J key - visual down means line moves down)
 ---@returns nil
 function M.move_buffer_down()
+  if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
+    return
+  end
   if BAFA_BUF_ID == nil or not vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then
     return
   end
 
+  --- Ensure sorting is manual when moving
+  M.toggle_sorting(Types.BafaSorting.MANUAL)
   local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
+  if selected_line_number == nil then
+    return
+  end
   if State.move_buffer_down(selected_line_number) then
     refresh_ui()
     vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { selected_line_number + 1, 0 })
-    BAFA_CURRENT_SORTING = Types.BafaSorting.MANUAL
   end
 end
 
@@ -399,17 +410,19 @@ function M.refresh_ui()
   refresh_ui()
 end
 
----Enable default sorting
----Sets sorting to automatic and refreshes UI
+---Toggle sorting mode
+---@param sorting BafaSorting|nil Optional sorting mode to set (manual/auto). If nil, toggles between modes.
 ---@returns nil
-function M.toggle_sorting()
-  local state_sorting = State.get_persisted_sorting()
-  if state_sorting == Types.BafaSorting.AUTO then
+function M.toggle_sorting(sorting)
+  local current_sorting_mode = State.get_persisted_sorting()
+  if current_sorting_mode == Types.BafaSorting.AUTO and (sorting == nil or sorting == Types.BafaSorting.MANUAL) then
     Logger.notify("Sorting set to: " .. Types.BafaSorting.MANUAL, Logger.INFO)
     State.set_persisted_sorting(Types.BafaSorting.MANUAL)
-  else
+  elseif current_sorting_mode == Types.BafaSorting.MANUAL and (sorting == nil or sorting == Types.BafaSorting.AUTO) then
     Logger.notify("Sorting set to: " .. Types.BafaSorting.AUTO, Logger.INFO)
     State.set_persisted_sorting(Types.BafaSorting.AUTO)
+  else
+    Logger.debug("Sorting mode unchanged: " .. current_sorting_mode)
   end
   refresh_ui()
 end
