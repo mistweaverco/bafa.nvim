@@ -1,15 +1,42 @@
-local BufferUtils = require("bafa.utils.buffers")
+local Logger = require("bafa.logger")
+local Types = require("bafa.types")
 local M = {}
 
--- State management for buffer operations
+-- INFO: Requires kikao.nvim to be installed for persisting order and sorting state
+-- acrros Neovim restarts.
+-- See: https://github.com/mistweaverco/kikao.nvim
+-- Will print warnings (if log level is set to to warn)
+-- if kikao.nvim is not found when attempting to use persistence features.
+local KIKAO_URL = "https://github.com/mistweaverco/kikao.nvim"
+
+---State management for buffer operations
+---@class BafaState
 local state = {
+  sorting = nil,
   original_buffers = {}, -- Original buffer list when menu opened
   working_buffers = {}, -- Current working buffer list (with modifications)
   history = {}, -- History for undo/redo
   history_index = 0, -- Current position in history
 }
 
--- Deep copy a buffer list
+---Returns a valid sorting string
+---@param sorting BafaSorting|nil
+---@returns BafaSorting
+local get_valid_sorting = function(sorting)
+  if sorting == nil then
+    return Types.BafaSorting.DEFAULT
+  end
+  for _, valid_sorting in pairs(Types.BafaSorting) do
+    if sorting == valid_sorting then
+      return sorting
+    end
+  end
+  return Types.BafaSorting.DEFAULT
+end
+
+---Deep copy a buffer list
+---@param buffers BafaBuffer[]
+---@returns BafaBuffer[]
 local function copy_buffer_list(buffers)
   local copy = {}
   for _, buf in ipairs(buffers) do
@@ -37,29 +64,34 @@ local function save_current_to_history()
   state.history_index = #state.history
 end
 
---- Get persisted order from optional storage
--- Note: Requires kikao.nvim to be installed for persistence
--- See: https://github.com/mistweaverco/kikao.nvim
-local function get_persisted_order()
+---Get persisted order from optional storage
+---@param sorting BafaSorting|nil
+---@returns BafaPersistedData
+local function get_persisted_data(sorting)
   -- check if plugin kikao.nvim is installed
   -- and if so, get the persisted order from its storage
   local kikao_ok, kikao_api = pcall(require, "kikao.api")
   if not kikao_ok then
-    return {}
+    return { buffers = {}, sorting = get_valid_sorting(sorting) }
   end
-  -- this will return nil if no value is stored
-  -- otherwise, it should be a table of buffer paths
-  -- like: { "/path/to/buf1", "/path/to/buf2", ... }
-  local order = kikao_api.get_value({ key = "buffer_order" })
-  if order == nil or type(order) ~= "table" then
-    return {}
-  end
-  return order
+  ---@type BafaBuffer[]|nil
+  local ordered_buffers = kikao_api.get_value({ key = "plugins.bafa.buffers" }) or {}
+  ---@type BafaSorting
+  local sorting_from_persisted_state = kikao_api.get_value({ key = "plugins.bafa.sorting" })
+  sorting = sorting ~= nil and sorting or sorting_from_persisted_state
+  -- return valid sorting, with fallback to DEFAULT
+  sorting = get_valid_sorting(sorting)
+  return { buffers = ordered_buffers, sorting = sorting }
 end
 
--- Apply persisted order to buffer list (matches by buffer path)
-local function apply_persisted_order(buffers)
-  local persisted_order = get_persisted_order()
+---Apply persisted order to buffer list (matches by buffer path)
+---@param buffers BafaBuffer[]
+---@param sorting BafaSorting|nil
+---@return BafaBuffer[]
+local function apply_persisted_data(buffers, sorting)
+  local persisted_data = get_persisted_data(sorting)
+  ---@type BafaBuffer[]
+  local persisted_order = persisted_data.buffers
 
   -- Create a map of buffer path to buffer
   local buffer_map = {}
@@ -67,8 +99,10 @@ local function apply_persisted_order(buffers)
     buffer_map[buf.path] = buf
   end
 
-  -- Separate new buffers (not in persisted order) from existing ones
+  ---Separate new buffers (not in persisted order) from existing ones
+  ---@type BafaBuffer[]
   local new_buffers = {}
+  ---@type table<string, boolean>
   local used_paths = {}
 
   for _, buf in ipairs(buffers) do
@@ -87,7 +121,8 @@ local function apply_persisted_order(buffers)
     end
   end
 
-  -- Build ordered list: new buffers first, then persisted order
+  ---Build ordered list: new buffers first, then persisted order
+  ---@type BafaBuffer[]
   local ordered = {}
 
   -- Add new buffers first (sorted by last_used, most recent first)
@@ -110,23 +145,28 @@ local function apply_persisted_order(buffers)
   return ordered
 end
 
--- Initialize state with current buffers
+---Check if sorting is AUTO
+---@param sorting BafaSorting
+---@returns boolean
+local is_auto_sorting = function(sorting)
+  return sorting == Types.BafaSorting.AUTO
+end
+
+---Initialize state with current buffers
+---@param initial_buffers BafaBuffer[]
 function M.init(initial_buffers)
+  local sorting = M.get_persisted_sorting()
   -- Apply persisted order if available
-  local ordered_buffers = apply_persisted_order(initial_buffers)
-  state.inital_buffers = initial_buffers
+  local ordered_buffers = is_auto_sorting(sorting) and initial_buffers or apply_persisted_data(initial_buffers)
+  state.sorting = sorting
   state.original_buffers = copy_buffer_list(ordered_buffers)
   state.working_buffers = copy_buffer_list(ordered_buffers)
   state.history = { copy_buffer_list(ordered_buffers) }
   state.history_index = 1
 end
 
----Get initial buffers
-function M.get_initial_buffers()
-  return state.inital_buffers
-end
-
--- Get working buffers
+---Get working buffers
+---@return BafaBuffer[]
 function M.get_working_buffers()
   return state.working_buffers
 end
@@ -163,7 +203,9 @@ function M.delete_buffer_at_index(idx)
   return true
 end
 
--- Move buffer up (swap with previous)
+---Move buffer up (swap with previous)
+---@param idx number: Index of the buffer to move up
+---@returns boolean: True if moved, false if not (e.g., at top)
 function M.move_buffer_up(idx)
   if idx <= 1 or idx > #state.working_buffers then
     return false
@@ -176,7 +218,9 @@ function M.move_buffer_up(idx)
   return true
 end
 
--- Move buffer down (swap with next)
+---Move buffer down (swap with next)
+---@param idx number: Index of the buffer to move down
+---@returns boolean: True if moved, false if not (e.g., at bottom)
 function M.move_buffer_down(idx)
   if idx < 1 or idx >= #state.working_buffers then
     return false
@@ -189,20 +233,19 @@ function M.move_buffer_down(idx)
   return true
 end
 
--- Add buffer to list (adds to end)
+---Add buffer to list
+---@param buffer BafaBuffer: Buffer to add
+---@returns boolean: True if added
 function M.add_buffer(buffer)
   table.insert(state.working_buffers, buffer)
   save_current_to_history()
   return true
 end
 
--- Get buffer at index
--- @param idx number: Index of the buffer to retrieve
--- @param BafaSorting current_sorting: Current sorting method (not used here but kept for compatibility)
-function M.get_buffer_at_index(idx, current_sorting)
-  if current_sorting == "last_used" then
-    return BufferUtils.get_buffer_by_index(idx)
-  end
+---Get buffer at index
+---@param idx number: Index of the buffer to retrieve
+---@returns BafaBuffer|nil Buffer at index or nil if out of bounds
+function M.get_buffer_at_index(idx)
   return state.working_buffers[idx]
 end
 
@@ -235,42 +278,55 @@ function M.reset()
   state.history_index = 1
 end
 
--- Get buffers to add (buffers not in current list)
-function M.get_available_buffers(all_buffers)
-  local working_numbers = {}
-  for _, buf in ipairs(state.working_buffers) do
-    working_numbers[buf.number] = true
-  end
-
-  local available = {}
-  for _, buf in ipairs(all_buffers) do
-    if not working_numbers[buf.number] then
-      table.insert(available, buf)
-    end
-  end
-
-  return available
-end
-
--- Save current order as persisted order
--- Stores buffer paths instead of numbers since numbers change between sessions
--- Note: Requires kikao.nvim to be installed for persistence
--- See: https://github.com/mistweaverco/kikao.nvim
+---Save current order as persisted order
+---Stores buffer paths instead of numbers since numbers change between sessions
+---@returns nil
 function M.save_order()
-  local order = {}
+  ---@type BafaBuffer[]
+  local ordererd_buffers = {}
   for _, buf in ipairs(state.working_buffers) do
     -- Only save valid buffers with paths (skip unnamed buffers)
     if vim.api.nvim_buf_is_valid(buf.number) and buf.path ~= "" then
-      table.insert(order, buf.path)
+      table.insert(ordererd_buffers, buf.path)
     end
   end
   -- check if plugin kikao.nvim is installed
   -- and if so, save the persisted order to its storage
   local kikao_ok, kikao_api = pcall(require, "kikao.api")
   if not kikao_ok then
+    Logger.warn("kikao.nvim not found, can only persist order in volatile state (in-memory)", "See: " .. KIKAO_URL)
     return
   end
-  kikao_api.set_value({ key = "buffer_order", value = order })
+  kikao_api.set_value({ key = "plugins.bafa.buffers", value = ordererd_buffers })
+  kikao_api.set_value({ key = "plugins.bafa.sorting", value = M.get_persisted_sorting() })
+end
+
+---Get persisted sorting method
+---If kikao.nvim is not installed, returns in-memory state or DEFAULT
+---@returns BafaSorting
+function M.get_persisted_sorting()
+  local kikao_ok, kikao_api = pcall(require, "kikao.api")
+  if not kikao_ok then
+    Logger.warn("kikao.nvim not found, returning from volatile state (in-memory) or DEFAULT", "See: " .. KIKAO_URL)
+    return Types.BafaSorting.DEFAULT
+  end
+  local sorting = kikao_api.get_value({ key = "plugins.bafa.sorting" })
+  return state.sorting or get_valid_sorting(sorting)
+end
+
+---Set persisted sorting method
+---If kikao.nvim is not installed, only updates in-memory state
+---@param sorting BafaSorting|nil
+---@returns nil
+function M.set_persisted_sorting(sorting)
+  state.sorting = get_valid_sorting(sorting)
+  M.save_order()
+  local kikao_ok, kikao_api = pcall(require, "kikao.api")
+  if not kikao_ok then
+    Logger.warn("kikao.nvim not found, can only persist sorting in volatile state (in-memory)", "See: " .. KIKAO_URL)
+    return
+  end
+  kikao_api.set_value({ key = "plugins.bafa.sorting", value = state.sorting })
 end
 
 return M
