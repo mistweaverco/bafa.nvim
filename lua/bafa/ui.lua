@@ -1,28 +1,24 @@
+local Logger = require("bafa.logger")
 local Config = require("bafa.config")
 local BufferUtils = require("bafa.utils.buffers")
 local Keymaps = require("bafa.utils.keymaps")
 local Autocmds = require("bafa.utils.autocmds")
 local State = require("bafa.utils.state")
+local Types = require("bafa.types")
 local _, Devicons = pcall(require, "nvim-web-devicons")
 
 local BAFA_NS_ID = vim.api.nvim_create_namespace("bafa.nvim")
 
+---@type number|nil
 local BAFA_WIN_ID = nil
+---@type number|nil
 local BAFA_BUF_ID = nil
+---@type number|nil
 local BAFA_DIAGNOSTIC_AUTOCMD_ID = nil
 local MAIN_WINDOW_WIDTH = vim.api.nvim_win_get_width(0)
 
 local DIAGNOSTICS_LABELS = { "Error", "Warn", "Info", "Hint" }
 local DIAGNOSTICS_SIGNS = { " ", " ", " ", " " }
-
----@enum BAFA_SORTING
-local BafaSorting = {
-  LAST_USED = "last_used",
-  MANUAL = "manual",
-}
-
----@type BAFA_SORTING
-local BAFA_CURRENT_SORTING = "last_used"
 
 local function get_diagnostics(bufnr)
   local count = vim.diagnostic.count(bufnr)
@@ -135,8 +131,7 @@ local function refresh_ui()
   -- Clear existing highlights and extmarks
   vim.api.nvim_buf_clear_namespace(BAFA_BUF_ID, BAFA_NS_ID, 0, -1)
 
-  local working_buffers = BAFA_CURRENT_SORTING == BafaSorting.LAST_USED and BufferUtils.get_buffers_as_table()
-    or State.get_working_buffers()
+  local working_buffers = State.get_working_buffers()
   local contents = {}
 
   for idx, buffer in ipairs(working_buffers) do
@@ -144,7 +139,10 @@ local function refresh_ui()
     contents[idx] = string.format("  %s %s", icon, buffer.name)
   end
 
-  vim.api.nvim_buf_set_lines(BAFA_BUF_ID, 0, -1, false, contents)
+  --- Safely set buffer lines
+  --- This is necessary to avoid errors when the buffer is modified externally,
+  --- or we are trying to set lines in a non-modifiable buffer.
+  pcall(vim.api.nvim_buf_set_lines, BAFA_BUF_ID, 0, -1, false, contents)
 
   local count_max_diagnostics = 0
 
@@ -237,7 +235,7 @@ local M = {}
 
 function M.select_menu_item()
   local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
-  local selected_buffer = State.get_buffer_at_index(selected_line_number, BAFA_CURRENT_SORTING)
+  local selected_buffer = State.get_buffer_at_index(selected_line_number)
   if selected_buffer == nil then
     return
   end
@@ -246,10 +244,12 @@ function M.select_menu_item()
   M.commit_changes()
   close_window()
   if vim.api.nvim_buf_is_valid(selected_buffer.number) then
-    vim.api.nvim_set_current_buf(selected_buffer.number)
+    pcall(vim.api.nvim_set_current_buf, selected_buffer.number)
   end
 end
 
+---Delete buffer (dd key or D key in normal mode)
+---@returns nil
 function M.delete_menu_item()
   if BAFA_BUF_ID == nil or not vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then
     return
@@ -280,35 +280,50 @@ function M.delete_menu_item()
   end
 end
 
--- Move buffer up (K key - visual up means line moves up)
+---Move buffer up (K key - visual up means line moves up)
+---@returns nil
 function M.move_buffer_up()
+  if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
+    return
+  end
   if BAFA_BUF_ID == nil or not vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then
     return
   end
 
+  --- Ensure sorting is manual when moving
+  M.toggle_sorting(Types.BafaSorting.MANUAL)
   local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
   if State.move_buffer_up(selected_line_number) then
     refresh_ui()
     vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { selected_line_number - 1, 0 })
-    BAFA_CURRENT_SORTING = BafaSorting.MANUAL
   end
 end
 
--- Move buffer down (J key - visual down means line moves down)
+---Move buffer down (J key - visual down means line moves down)
+---@returns nil
 function M.move_buffer_down()
+  if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
+    return
+  end
   if BAFA_BUF_ID == nil or not vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then
     return
   end
 
+  --- Ensure sorting is manual when moving
+  M.toggle_sorting(Types.BafaSorting.MANUAL)
   local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
+  if selected_line_number == nil then
+    return
+  end
   if State.move_buffer_down(selected_line_number) then
     refresh_ui()
     vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { selected_line_number + 1, 0 })
-    BAFA_CURRENT_SORTING = BafaSorting.MANUAL
   end
 end
 
--- Commit changes (Enter key)
+---Commit changes (Enter key)
+---Deletes buffers that were removed from the list and saves the order
+---@returns nil
 function M.commit_changes()
   if not State.has_changes() then
     return
@@ -362,36 +377,58 @@ function M.commit_changes()
   State.init(new_buffers)
 end
 
--- Reject changes (Escape key in normal mode)
+---Reject changes (Escape key in normal mode)
+---Resets state to original buffers
+---@returns nil
 function M.reject_changes()
   State.reset()
   refresh_ui()
 end
 
--- Undo
+---Undo
+---Undoes last change
+---@returns nil
 function M.undo()
   if State.undo() then
     refresh_ui()
   end
 end
 
--- Redo
+---Redo
+--.Redoes last undone change
+--@returns nil
 function M.redo()
   if State.redo() then
     refresh_ui()
   end
 end
 
--- Expose refresh_ui so it can be called from autocmds
+---Refresh UI
+---Refreshes the UI from state
+---@returns nil
 function M.refresh_ui()
   refresh_ui()
 end
 
-function M.enable_default_sorting()
-  BAFA_CURRENT_SORTING = BafaSorting.LAST_USED
+---Toggle sorting mode
+---@param sorting BafaSorting|nil Optional sorting mode to set (manual/auto). If nil, toggles between modes.
+---@returns nil
+function M.toggle_sorting(sorting)
+  local current_sorting_mode = State.get_persisted_sorting()
+  if current_sorting_mode == Types.BafaSorting.AUTO and (sorting == nil or sorting == Types.BafaSorting.MANUAL) then
+    Logger.notify("Sorting set to: " .. Types.BafaSorting.MANUAL, Logger.INFO)
+    State.set_persisted_sorting(Types.BafaSorting.MANUAL)
+  elseif current_sorting_mode == Types.BafaSorting.MANUAL and (sorting == nil or sorting == Types.BafaSorting.AUTO) then
+    Logger.notify("Sorting set to: " .. Types.BafaSorting.AUTO, Logger.INFO)
+    State.set_persisted_sorting(Types.BafaSorting.AUTO)
+  else
+    Logger.debug("Sorting mode unchanged: " .. current_sorting_mode)
+  end
   refresh_ui()
 end
 
+---Toggle bafa menu
+---@returns nil
 function M.toggle()
   if BAFA_WIN_ID ~= nil and vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
     close_window()
