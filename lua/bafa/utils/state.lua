@@ -249,6 +249,10 @@ function M.get_buffer_at_index(idx)
   return state.working_buffers[idx]
 end
 
+function M.is_working_buffers_empty()
+  return #state.working_buffers == 0
+end
+
 -- Undo last change
 function M.undo()
   if state.history_index <= 1 then

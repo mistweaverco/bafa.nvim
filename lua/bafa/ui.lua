@@ -347,6 +347,18 @@ end
 local M = {}
 
 function M.select_menu_item()
+  -- check if working buffers are empty
+  -- if so, commit and close
+  -- otherwiese the currently open buffer will remain open
+  -- and you never can empty the buffer list
+  if State.is_working_buffers_empty() then
+    -- force close current open buffer
+    vim.api.nvim_buf_delete(0, { force = true })
+    M.commit_changes()
+    close_window()
+    return
+  end
+
   local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
   local selected_buffer = State.get_buffer_at_index(selected_line_number)
   if selected_buffer == nil then
