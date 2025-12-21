@@ -233,6 +233,71 @@ function M.move_buffer_down(idx)
   return true
 end
 
+---Move a range of buffers up as a block
+---When moving up, the item above the range moves to the bottom of the range
+---Example: [1, 2, 3, 4] with selection [2, 3, 4] -> [2, 3, 4, 1]
+---@param start_idx number: Start index of the range (1-indexed, inclusive)
+---@param end_idx number: End index of the range (1-indexed, inclusive)
+---@returns boolean: True if moved, false if not (e.g., at top)
+function M.move_buffer_range_up(start_idx, end_idx)
+  if
+    start_idx <= 1
+    or start_idx > #state.working_buffers
+    or end_idx > #state.working_buffers
+    or start_idx > end_idx
+  then
+    return false
+  end
+
+  -- Extract the range to move and the item above
+  local range = {}
+  for i = start_idx, end_idx do
+    table.insert(range, state.working_buffers[i])
+  end
+  local item_above = state.working_buffers[start_idx - 1]
+
+  -- Place range at new position (shifted up by 1)
+  for i = 0, #range - 1 do
+    state.working_buffers[start_idx - 1 + i] = range[i + 1]
+  end
+
+  -- Place item_above at the end of where the range was
+  state.working_buffers[end_idx] = item_above
+
+  save_current_to_history()
+  return true
+end
+
+---Move a range of buffers down as a block
+---When moving down, the item below the range moves to the top of the range
+---Example: [1, 2, 3, 4] with selection [1, 2, 3] -> [4, 1, 2, 3]
+---@param start_idx number: Start index of the range (1-indexed, inclusive)
+---@param end_idx number: End index of the range (1-indexed, inclusive)
+---@returns boolean: True if moved, false if not (e.g., at bottom)
+function M.move_buffer_range_down(start_idx, end_idx)
+  if start_idx < 1 or end_idx >= #state.working_buffers or start_idx > end_idx then
+    return false
+  end
+
+  -- Extract the range to move and the item below
+  local range = {}
+  for i = start_idx, end_idx do
+    table.insert(range, state.working_buffers[i])
+  end
+  local item_below = state.working_buffers[end_idx + 1]
+
+  -- Place item_below at the start of where the range was
+  state.working_buffers[start_idx] = item_below
+
+  -- Place range at new position (shifted down by 1)
+  for i = 0, #range - 1 do
+    state.working_buffers[start_idx + 1 + i] = range[i + 1]
+  end
+
+  save_current_to_history()
+  return true
+end
+
 ---Add buffer to list
 ---@param buffer BafaBuffer: Buffer to add
 ---@returns boolean: True if added

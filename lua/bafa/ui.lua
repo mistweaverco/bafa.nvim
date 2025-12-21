@@ -484,6 +484,7 @@ function M.delete_menu_item()
 end
 
 ---Move buffer up (K key - visual up means line moves up)
+---Supports visual selection: moves selected range as a block
 ---@returns nil
 function M.move_buffer_up()
   if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
@@ -495,14 +496,46 @@ function M.move_buffer_up()
 
   --- Ensure sorting is manual when moving
   M.toggle_sorting(Types.BafaSorting.MANUAL)
-  local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
-  if State.move_buffer_up(selected_line_number) then
+
+  local mode = vim.fn.mode()
+  local was_in_visual_mode = mode:match("[vV]")
+
+  -- Get selection indices
+  local selected_indices = get_selected_indices()
+  local moved = false
+  local new_cursor_line
+
+  if was_in_visual_mode and #selected_indices > 1 then
+    -- Move range as a block
+    local start_idx = math.min(unpack(selected_indices))
+    local end_idx = math.max(unpack(selected_indices))
+
+    if State.move_buffer_range_up(start_idx, end_idx) then
+      moved = true
+      -- Cursor stays at the start of the selection (which moved up by 1)
+      new_cursor_line = math.max(1, start_idx - 1)
+      -- Exit visual mode after moving
+      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", true)
+    end
+  else
+    -- Single buffer move
+    local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
+    if State.move_buffer_up(selected_line_number) then
+      moved = true
+      new_cursor_line = selected_line_number - 1
+    end
+  end
+
+  if moved then
     refresh_ui()
-    vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { selected_line_number - 1, 0 })
+    if new_cursor_line and BAFA_WIN_ID ~= nil then
+      vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { new_cursor_line, 0 })
+    end
   end
 end
 
 ---Move buffer down (J key - visual down means line moves down)
+---Supports visual selection: moves selected range as a block
 ---@returns nil
 function M.move_buffer_down()
   if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
@@ -514,13 +547,46 @@ function M.move_buffer_down()
 
   --- Ensure sorting is manual when moving
   M.toggle_sorting(Types.BafaSorting.MANUAL)
-  local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
-  if selected_line_number == nil then
-    return
+
+  local mode = vim.fn.mode()
+  local was_in_visual_mode = mode:match("[vV]")
+
+  -- Get selection indices
+  local selected_indices = get_selected_indices()
+  local moved = false
+  local new_cursor_line
+
+  if was_in_visual_mode and #selected_indices > 1 then
+    -- Move range as a block
+    local start_idx = math.min(unpack(selected_indices))
+    local end_idx = math.max(unpack(selected_indices))
+
+    if State.move_buffer_range_down(start_idx, end_idx) then
+      moved = true
+      -- Cursor stays at the start of the selection (which moved down by 1)
+      new_cursor_line = start_idx + 1
+      -- Exit visual mode after moving
+      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", true)
+    end
+  else
+    -- Single buffer move
+    local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
+    if selected_line_number == nil then
+      return
+    end
+    if State.move_buffer_down(selected_line_number) then
+      moved = true
+      new_cursor_line = selected_line_number + 1
+    end
   end
-  if State.move_buffer_down(selected_line_number) then
+
+  if moved then
     refresh_ui()
-    vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { selected_line_number + 1, 0 })
+    if new_cursor_line and BAFA_WIN_ID ~= nil then
+      local working_buffers = State.get_working_buffers()
+      new_cursor_line = math.min(new_cursor_line, #working_buffers)
+      vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { new_cursor_line, 0 })
+    end
   end
 end
 

@@ -48,6 +48,9 @@ function M.defaults(bufnr)
   -- Visual mode: delete selected buffers (d and D work in visual mode)
   vim.api.nvim_buf_set_keymap(bufnr, "v", "d", "<Cmd>lua require('bafa.ui').delete_menu_item()<CR>", {})
   vim.api.nvim_buf_set_keymap(bufnr, "v", "D", "<Cmd>lua require('bafa.ui').delete_menu_item()<CR>", {})
+  -- Visual mode: move selected buffers up/down (K and J work in visual mode)
+  vim.api.nvim_buf_set_keymap(bufnr, "v", "K", "<Cmd>lua require('bafa.ui').move_buffer_up()<CR>", { silent = true })
+  vim.api.nvim_buf_set_keymap(bufnr, "v", "J", "<Cmd>lua require('bafa.ui').move_buffer_down()<CR>", { silent = true })
 end
 
 return M
