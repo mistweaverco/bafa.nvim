@@ -79,6 +79,7 @@ M.BafaConfigNotifyProvider = {
 ---@field style BafaConfigStyle
 ---@field diagnostics boolean
 ---@field modified_hl string
+---@field line_numbers boolean
 ---@field log_level BafaLoggerLogLevelNames
 ---@field notify BafaConfigNotify
 
@@ -90,6 +91,7 @@ M.BafaConfigNotifyProvider = {
 ---@field style BafaConfigStyle|nil
 ---@field diagnostics boolean|nil
 ---@field modified_hl string|nil
+---@field line_numbers boolean|nil
 ---@field log_level BafaLoggerLogLevelNames|nil
 ---@field notify BafaConfigNotify|nil
 

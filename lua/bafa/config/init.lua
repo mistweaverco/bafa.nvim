@@ -28,6 +28,7 @@ M.config_defaults = {
   style = "minimal",
   diagnostics = true,
   modified_hl = "WarningMsg",
+  line_numbers = false,
   log_level = Types.BafaLoggerLogLevelNames.error,
   notify = {
     provider = Types.BafaConfigNotifyProvider.nvim_notify,

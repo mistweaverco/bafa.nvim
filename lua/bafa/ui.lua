@@ -4,6 +4,7 @@ local BufferUtils = require("bafa.utils.buffers")
 local Keymaps = require("bafa.utils.keymaps")
 local Autocmds = require("bafa.utils.autocmds")
 local State = require("bafa.utils.state")
+local UiUtils = require("bafa.utils.ui")
 local Types = require("bafa.types")
 local _, Devicons = pcall(require, "nvim-web-devicons")
 
@@ -432,10 +433,17 @@ end
 function M.toggle()
   if BAFA_WIN_ID ~= nil and vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
     close_window()
+    -- Restore cursor when closing the window
+    UiUtils.show_cursor()
     return
   end
 
+  -- Before creating the window, hide the cursor
+  UiUtils.hide_cursor()
+
   local win_info = create_window()
+  -- Enable cursorline for, otherwise, without a cursor, the user can't see the selection
+  UiUtils.enable_cursorline(win_info.win_id)
   BAFA_WIN_ID = win_info.win_id
   BAFA_BUF_ID = win_info.bufnr
 
@@ -451,9 +459,9 @@ function M.toggle()
   -- Refresh UI from state
   refresh_ui()
 
-  Keymaps.noop(BAFA_BUF_ID)
-  Keymaps.defaults(BAFA_BUF_ID)
-  Autocmds.defaults(BAFA_BUF_ID)
+  Keymaps.noop(win_info.bufnr)
+  Keymaps.defaults(win_info.bufnr)
+  Autocmds.defaults(win_info.bufnr)
 
   -- Set up diagnostic autocmd to refresh UI when diagnostics change
   if Config.get().diagnostics then
