@@ -11,7 +11,7 @@ vim.api.nvim_set_hl(0, "BafaHiddenCursor", {
 })
 
 function M.hide_cursor()
-  vim.opt.guicursor = "n:block-BafaHiddenCursor"
+  vim.opt.guicursor = "n-v:block-BafaHiddenCursor"
 end
 
 function M.enable_cursorline(winid)
