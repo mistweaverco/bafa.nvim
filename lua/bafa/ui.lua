@@ -4,6 +4,7 @@ local BufferUtils = require("bafa.utils.buffers")
 local Keymaps = require("bafa.utils.keymaps")
 local Autocmds = require("bafa.utils.autocmds")
 local State = require("bafa.utils.state")
+local UiUtils = require("bafa.utils.ui")
 local Types = require("bafa.types")
 local _, Devicons = pcall(require, "nvim-web-devicons")
 
@@ -15,20 +16,101 @@ local BAFA_WIN_ID = nil
 local BAFA_BUF_ID = nil
 ---@type number|nil
 local BAFA_DIAGNOSTIC_AUTOCMD_ID = nil
-local MAIN_WINDOW_WIDTH = vim.api.nvim_win_get_width(0)
 
 local DIAGNOSTICS_LABELS = { "Error", "Warn", "Info", "Hint" }
-local DIAGNOSTICS_SIGNS = { " ", " ", " ", " " }
 
+---@class BafaDiagnosticInfo
+---@field count number
+---@field icon string
+---@field hl_group string
+
+---Get diagnostics for a buffer
+---@param bufnr number The buffer number
+---@return BafaDiagnosticInfo[] Array of diagnostics info
 local function get_diagnostics(bufnr)
   local count = vim.diagnostic.count(bufnr)
   local diags = {}
+  local bafa_config = Config.get()
+  local icons = bafa_config.icons and bafa_config.icons.diagnostics or {}
+
+  -- Default fallback icons
+  -- These will be used if no sign is defined and no icon is set in config
+  -- Matches DIAGNOSTICS_LABELS order
+  local default_icons = { " ", " ", " ", " " }
+
   for k, v in pairs(count) do
-    local defined_sign = vim.fn.sign_getdefined("DiagnosticSign" .. DIAGNOSTICS_LABELS[k])
-    local sign_icon = #defined_sign ~= 0 and defined_sign[1].text or DIAGNOSTICS_SIGNS[k]
-    table.insert(diags, { tostring(v) .. sign_icon, "DiagnosticSign" .. DIAGNOSTICS_LABELS[k] })
+    local label = DIAGNOSTICS_LABELS[k]
+    local defined_sign = vim.fn.sign_getdefined("DiagnosticSign" .. label)
+    local sign_icon
+
+    if #defined_sign ~= 0 then
+      sign_icon = defined_sign[1].text
+    elseif icons[label] then
+      sign_icon = icons[label]
+    else
+      -- Fallback to default icons if config doesn't have them
+      sign_icon = default_icons[k] or " "
+    end
+
+    -- Ensure icon has a space after it for proper spacing
+    if sign_icon:sub(-1) ~= " " then
+      sign_icon = sign_icon .. " "
+    end
+
+    table.insert(diags, {
+      count = v,
+      icon = sign_icon,
+      hl_group = "DiagnosticSign" .. label,
+    })
   end
   return diags
+end
+
+--- Calculate the width needed for line numbers column
+---@param line_count number The number of lines
+---@return number The width needed for the number column (0 if line numbers are off)
+local function get_number_column_width(line_count)
+  local bafa_config = Config.get()
+  if not bafa_config.line_numbers then
+    return 0
+  end
+  if line_count == 0 then
+    return 0
+  end
+  -- Calculate digits needed for the largest line number
+  local digits = math.floor(math.log10(line_count)) + 1
+  -- Number column width: digits + spacing (typically 1-2 spaces)
+  return digits + 2
+end
+
+--- Calculate the width needed for diagnostics icons
+---@param buffers table[] Array of buffer objects
+---@return number max_diagnostics_width The width needed for diagnostics (0 if diagnostics are disabled)
+local function get_diagnostics_width(buffers)
+  local bafa_config = Config.get()
+  if not bafa_config.diagnostics then
+    return 0
+  end
+
+  local max_diagnostics_width = 0
+  for _, buffer in ipairs(buffers) do
+    if buffer and buffer.number and vim.api.nvim_buf_is_valid(buffer.number) then
+      local diags = get_diagnostics(buffer.number)
+      if #diags > 0 then
+        -- Build the full diagnostic string as it would appear (all diagnostics concatenated)
+        local full_diag_string = ""
+        for _, diagnostic in ipairs(diags) do
+          full_diag_string = full_diag_string .. " " .. diagnostic.count .. " " .. diagnostic.icon
+        end
+        -- Calculate the actual display width of the concatenated diagnostics
+        local total_width = vim.fn.strdisplaywidth(full_diag_string)
+        if total_width > max_diagnostics_width then
+          max_diagnostics_width = total_width
+        end
+      end
+    end
+  end
+  return max_diagnostics_width > 0 and max_diagnostics_width or 0
 end
 
 local get_buffer_icon = function(buffer)
@@ -91,13 +173,17 @@ end
 ---@return number count of diagnostics added
 local add_diagnostics_icons = function(idx, buffer)
   if BAFA_BUF_ID == nil then
-    return
+    return 0
   end
   local count_diagnostics = 0
   local diags = get_diagnostics(buffer.number)
   for _, diagnostic in ipairs(diags) do
     vim.api.nvim_buf_set_extmark(BAFA_BUF_ID, BAFA_NS_ID, idx - 1, 0, {
-      virt_text = { { diagnostic[1], diagnostic[2] } },
+      virt_text = {
+        { tostring(diagnostic.count), diagnostic.hl_group },
+        { " ", diagnostic.hl_group },
+        { diagnostic.icon, diagnostic.hl_group },
+      },
     })
     count_diagnostics = count_diagnostics + 1
   end
@@ -108,6 +194,13 @@ local function close_window()
   if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
     return
   end
+
+  -- Save cursor line position (only in manual mode)
+  local cursor_pos = vim.api.nvim_win_get_cursor(BAFA_WIN_ID)
+  if cursor_pos and cursor_pos[1] then
+    State.save_cursor_line(cursor_pos[1])
+  end
+
   vim.api.nvim_win_close(BAFA_WIN_ID, true)
   BAFA_WIN_ID = nil
   BAFA_BUF_ID = nil
@@ -144,8 +237,6 @@ local function refresh_ui()
   --- or we are trying to set lines in a non-modifiable buffer.
   pcall(vim.api.nvim_buf_set_lines, BAFA_BUF_ID, 0, -1, false, contents)
 
-  local count_max_diagnostics = 0
-
   -- Calculate longest buffer name for width calculation
   local longest_buffer_name = 0
   for _, buffer in ipairs(working_buffers) do
@@ -162,40 +253,65 @@ local function refresh_ui()
     add_modified_highlight(idx, buffer)
     -- add diagnostics
     if Config.get().diagnostics then
-      local diag_count = add_diagnostics_icons(idx, buffer)
-      if diag_count > 0 then
-        if diag_count > count_max_diagnostics then
-          count_max_diagnostics = diag_count
-        end
-      end
+      add_diagnostics_icons(idx, buffer)
     end
+    -- Visual selection highlighting is handled by Neovim's built-in visual mode
   end
 
-  -- Update window width if needed
-  local base_width = longest_buffer_name + 10 -- space for `:set number`, 2 spaces, icon and a space
-  if count_max_diagnostics > 0 then
-    base_width = base_width + (count_max_diagnostics * 2) -- each diagnostic icon takes approx 2 spaces
-  end
-  local needed_width = math.min(MAIN_WINDOW_WIDTH, base_width)
-  local bafa_config = Config.get()
-  -- Only update width if it's not manually set in config
-  if bafa_config.width == nil then
-    local current_width = vim.api.nvim_win_get_width(BAFA_WIN_ID)
-    if needed_width ~= current_width then
-      vim.api.nvim_win_set_width(BAFA_WIN_ID, needed_width)
-    end
+  -- Update window width and height if needed, and re-center
+  local number_column_width = get_number_column_width(#working_buffers)
+  local diagnostics_width = get_diagnostics_width(working_buffers)
+  local base_width = longest_buffer_name + 6 -- space for icon and padding
+  base_width = base_width + number_column_width -- add number column width if enabled
+  if diagnostics_width > 0 then
+    -- this is 4, because we have 2 spaces at the beginning of each row,
+    -- then the icon and the buffer name
+    -- when we have diagnostics enabled,
+    -- we have 1 space before diagnostics and 1 space after diagnostics
+    -- plus the 2 spaces at the end to match the beginning of the line
+    -- so total of 4 spaces
+    base_width = base_width + 4 -- some padding
   end
 
-  -- Update window height if needed
-  local max_height = vim.api.nvim_win_get_height(0)
-  local needed_height = #working_buffers + 2
-  local new_height = math.min(needed_height, max_height)
-  -- Only update height if it's not manually set in config
-  if bafa_config.height == nil then
-    local current_height = vim.api.nvim_win_get_height(BAFA_WIN_ID)
-    if new_height ~= current_height then
-      vim.api.nvim_win_set_height(BAFA_WIN_ID, new_height)
-    end
+  -- Get parent window dimensions based on relative setting
+  local max_width = vim.o.columns
+  local max_height = vim.o.lines
+
+  -- Calculate needed dimensions, ensuring they don't exceed parent window
+  local needed_width = math.min(max_width, base_width)
+  local needed_height = math.min(max_height, #working_buffers)
+
+  -- Ensure dimensions don't exceed parent window (safety check)
+  needed_width = math.min(needed_width, max_width)
+  needed_height = math.min(needed_height, max_height)
+
+  -- Update window dimensions if not manually set in config
+  local width_changed = false
+  local height_changed = false
+  local current_width = vim.api.nvim_win_get_width(BAFA_WIN_ID)
+  if needed_width ~= current_width then
+    vim.api.nvim_win_set_width(BAFA_WIN_ID, needed_width)
+    width_changed = true
+  end
+
+  local current_height = vim.api.nvim_win_get_height(BAFA_WIN_ID)
+  if needed_height ~= current_height then
+    vim.api.nvim_win_set_height(BAFA_WIN_ID, needed_height)
+    height_changed = true
+  end
+
+  -- Re-center the window after size changes (only if relative is "editor")
+  if width_changed or height_changed then
+    local final_width = needed_width
+    local final_height = needed_height
+    local row = math.floor((max_height - final_height) / 2) - 1
+    local col = math.floor((max_width - final_width) / 2)
+
+    vim.api.nvim_win_set_config(BAFA_WIN_ID, {
+      relative = "editor",
+      row = row,
+      col = col,
+    })
   end
 end
 
@@ -207,23 +323,28 @@ local function create_window()
   local max_height = vim.api.nvim_win_get_height(0)
   local buffer_longest_name_width = BufferUtils.get_width_longest_buffer_name()
   local buffer_lines = BufferUtils.get_lines_buffer_names()
-  -- preserve space for the icons
-  local width = math.min(max_width, buffer_longest_name_width + 10)
+  -- Get buffers for diagnostics width calculation
+  local buffers = BufferUtils.get_buffers_as_table()
+  -- Calculate width: buffer name + number column (if enabled) + diagnostics (if enabled) + icon spacing
+  local number_column_width = get_number_column_width(buffer_lines)
+  local diagnostics_width = get_diagnostics_width(buffers)
+  local width = math.min(max_width, buffer_longest_name_width + 4 + number_column_width + diagnostics_width)
   local height = math.min(max_height, buffer_lines + 2)
 
   BAFA_WIN_ID = vim.api.nvim_open_win(bufnr, true, {
     title = bafa_config.title,
+    ---@type BafaConfigTitlesPos
     title_pos = bafa_config.title_pos,
-    relative = bafa_config.relative,
+    relative = "editor",
+    ---@type BafaConfigBorder
     border = bafa_config.border,
-    width = bafa_config.width or width,
-    height = bafa_config.height or height,
-    row = math.floor(((vim.o.lines - (bafa_config.height or height)) / 2) - 1),
-    col = math.floor((vim.o.columns - (bafa_config.width or width)) / 2),
+    width = width,
+    height = height,
+    row = math.floor(((vim.o.lines - height) / 2) - 1),
+    col = math.floor((vim.o.columns - width) / 2),
+    ---@type BafaConfigStyle
     style = bafa_config.style,
   })
-
-  -- NormalFloat will be used by default for floating windows, respecting user's theme
 
   return {
     bufnr = bufnr,
@@ -234,6 +355,18 @@ end
 local M = {}
 
 function M.select_menu_item()
+  -- check if working buffers are empty
+  -- if so, commit and close
+  -- otherwiese the currently open buffer will remain open
+  -- and you never can empty the buffer list
+  if State.is_working_buffers_empty() then
+    -- force close current open buffer
+    vim.api.nvim_buf_delete(0, { force = true })
+    M.commit_changes()
+    close_window()
+    return
+  end
+
   local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
   local selected_buffer = State.get_buffer_at_index(selected_line_number)
   if selected_buffer == nil then
@@ -248,39 +381,117 @@ function M.select_menu_item()
   end
 end
 
+---Get selected buffer indices (either visual selection or single cursor position)
+---@return number[] Array of selected line indices (1-indexed)
+local function get_selected_indices()
+  local indices = {}
+  local mode = vim.fn.mode()
+
+  -- Check if we're in visual mode (v, V, or Ctrl-v)
+  if mode:match("[vV]") then
+    -- Get visual selection range while still in visual mode
+    -- Use line("v") for the start of visual selection and line(".") for current position
+    local start_line = vim.fn.line("v")
+    local end_line = vim.fn.line(".")
+    local working_buffers = State.get_working_buffers()
+
+    -- Ensure valid range
+    start_line = math.max(1, math.min(start_line, #working_buffers))
+    end_line = math.max(1, math.min(end_line, #working_buffers))
+
+    -- Get all lines in selection
+    local min_line = math.min(start_line, end_line)
+    local max_line = math.max(start_line, end_line)
+
+    for i = min_line, max_line do
+      table.insert(indices, i)
+    end
+  else
+    -- Normal mode: just the current line
+    local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
+    if selected_line_number >= 1 then
+      table.insert(indices, selected_line_number)
+    end
+  end
+
+  return indices
+end
+
 ---Delete buffer (dd key or D key in normal mode)
+---Deletes selected buffers in visual mode, or single buffer in normal mode
 ---@returns nil
 function M.delete_menu_item()
   if BAFA_BUF_ID == nil or not vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then
     return
   end
 
-  local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
-  local selected_buffer = State.get_buffer_at_index(selected_line_number)
-  if selected_buffer == nil then
+  -- Get selection before exiting visual mode (if in visual mode)
+  local was_in_visual_mode = false
+  local mode = vim.fn.mode()
+  if mode:match("[vV]") then
+    was_in_visual_mode = true
+  end
+
+  local selected_indices = get_selected_indices()
+
+  -- Exit visual mode if we were in it (before processing deletion)
+  if was_in_visual_mode then
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", true)
+  end
+
+  if #selected_indices == 0 then
     return
   end
 
-  -- Check if buffer is modified and ask for confirmation
-  if vim.api.nvim_buf_is_valid(selected_buffer.number) and vim.bo[selected_buffer.number].modified then
-    local choice = vim.fn.inputlist({ "Buffer is modified. Delete anyway?", "Yes", "No" })
+  local working_buffers = State.get_working_buffers()
+
+  -- Check if any buffers are modified and ask for confirmation
+  local modified_buffers = {}
+  for _, idx in ipairs(selected_indices) do
+    local buffer = working_buffers[idx]
+    if buffer and vim.api.nvim_buf_is_valid(buffer.number) and vim.bo[buffer.number].modified then
+      table.insert(modified_buffers, buffer.name)
+    end
+  end
+
+  if #modified_buffers > 0 then
+    local message = string.format("%d buffer(s) are modified. Delete anyway?", #modified_buffers)
+    if #modified_buffers == 1 then
+      message = string.format('Buffer "%s" is modified. Delete anyway?', modified_buffers[1])
+    end
+    local choice = vim.fn.inputlist({ message, "Yes", "No" })
     if choice ~= 1 then
       return
     end
   end
 
-  -- Remove from state (this caches the deletion)
-  if State.delete_buffer_at_index(selected_line_number) then
+  -- Delete buffers in reverse order to maintain correct indices
+  table.sort(selected_indices, function(a, b)
+    return a > b
+  end)
+
+  local deleted_count = 0
+  for _, idx in ipairs(selected_indices) do
+    if State.delete_buffer_at_index(idx) then
+      deleted_count = deleted_count + 1
+    end
+  end
+
+  if deleted_count > 0 then
     refresh_ui()
-    -- Move cursor if we deleted the last item
-    local working_buffers = State.get_working_buffers()
-    if selected_line_number > #working_buffers and #working_buffers > 0 then
-      vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { #working_buffers, 0 })
+
+    -- Move cursor if we deleted the last item(s)
+    local new_working_buffers = State.get_working_buffers()
+    if #new_working_buffers > 0 and BAFA_WIN_ID ~= nil then
+      local max_line = math.max(unpack(selected_indices))
+      local new_cursor_line = math.min(max_line, #new_working_buffers)
+      vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { new_cursor_line, 0 })
     end
   end
 end
 
 ---Move buffer up (K key - visual up means line moves up)
+---Supports visual selection: moves selected range as a block
 ---@returns nil
 function M.move_buffer_up()
   if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
@@ -292,14 +503,68 @@ function M.move_buffer_up()
 
   --- Ensure sorting is manual when moving
   M.toggle_sorting(Types.BafaSorting.MANUAL)
-  local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
-  if State.move_buffer_up(selected_line_number) then
+
+  local mode = vim.fn.mode()
+  local was_in_visual_mode = mode:match("[vV]")
+
+  -- Get selection indices
+  local selected_indices = get_selected_indices()
+  local moved = false
+  local new_cursor_line
+
+  if was_in_visual_mode and #selected_indices > 1 then
+    -- Move range as a block
+    local start_idx = math.min(unpack(selected_indices))
+    local end_idx = math.max(unpack(selected_indices))
+    local range_size = end_idx - start_idx + 1
+
+    if State.move_buffer_range_up(start_idx, end_idx) then
+      -- Calculate new selection positions (moved up by 1)
+      local new_start_idx = math.max(1, start_idx - 1)
+      local new_end_idx = new_start_idx + range_size - 1
+
+      -- Refresh UI first to update buffer contents
+      refresh_ui()
+
+      -- Restore visual selection at new positions
+      -- Use a deferred callback to ensure UI is refreshed first
+      vim.schedule(function()
+        if
+          BAFA_WIN_ID ~= nil
+          and vim.api.nvim_win_is_valid(BAFA_WIN_ID)
+          and BAFA_BUF_ID ~= nil
+          and vim.api.nvim_buf_is_valid(BAFA_BUF_ID)
+        then
+          -- Set visual selection marks (bufnum, lnum, col, off)
+          vim.fn.setpos("'<", { BAFA_BUF_ID, new_start_idx, 1, 0 })
+          vim.fn.setpos("'>", { BAFA_BUF_ID, new_end_idx, 1, 0 })
+          -- Set cursor to start of selection
+          vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { new_start_idx, 0 })
+          -- Re-enter visual mode
+          vim.cmd("normal! gv")
+        end
+      end)
+      return -- Early return since refresh_ui is called above
+    end
+  else
+    -- Single buffer move
+    local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
+    if State.move_buffer_up(selected_line_number) then
+      moved = true
+      new_cursor_line = selected_line_number - 1
+    end
+  end
+
+  if moved then
     refresh_ui()
-    vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { selected_line_number - 1, 0 })
+    if new_cursor_line and BAFA_WIN_ID ~= nil then
+      vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { new_cursor_line, 0 })
+    end
   end
 end
 
 ---Move buffer down (J key - visual down means line moves down)
+---Supports visual selection: moves selected range as a block
 ---@returns nil
 function M.move_buffer_down()
   if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
@@ -311,13 +576,71 @@ function M.move_buffer_down()
 
   --- Ensure sorting is manual when moving
   M.toggle_sorting(Types.BafaSorting.MANUAL)
-  local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
-  if selected_line_number == nil then
-    return
+
+  local mode = vim.fn.mode()
+  local was_in_visual_mode = mode:match("[vV]")
+
+  -- Get selection indices
+  local selected_indices = get_selected_indices()
+  local moved = false
+  local new_cursor_line
+
+  if was_in_visual_mode and #selected_indices > 1 then
+    -- Move range as a block
+    local start_idx = math.min(unpack(selected_indices))
+    local end_idx = math.max(unpack(selected_indices))
+    local range_size = end_idx - start_idx + 1
+
+    if State.move_buffer_range_down(start_idx, end_idx) then
+      -- Calculate new selection positions (moved down by 1)
+      local new_start_idx = start_idx + 1
+      local new_end_idx = new_start_idx + range_size - 1
+
+      -- Refresh UI first to update buffer contents
+      refresh_ui()
+
+      -- Restore visual selection at new positions
+      -- Use a deferred callback to ensure UI is refreshed first
+      vim.schedule(function()
+        if
+          BAFA_WIN_ID ~= nil
+          and vim.api.nvim_win_is_valid(BAFA_WIN_ID)
+          and BAFA_BUF_ID ~= nil
+          and vim.api.nvim_buf_is_valid(BAFA_BUF_ID)
+        then
+          local working_buffers = State.get_working_buffers()
+          -- Clamp to valid range
+          new_end_idx = math.min(new_end_idx, #working_buffers)
+          -- Set visual selection marks (bufnum, lnum, col, off)
+          vim.fn.setpos("'<", { BAFA_BUF_ID, new_start_idx, 1, 0 })
+          vim.fn.setpos("'>", { BAFA_BUF_ID, new_end_idx, 1, 0 })
+          -- Set cursor to start of selection
+          vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { new_start_idx, 0 })
+          -- Re-enter visual mode
+          vim.cmd("normal! gv")
+        end
+      end)
+      return -- Early return since refresh_ui is called above
+    end
+  else
+    -- Single buffer move
+    local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
+    if selected_line_number == nil then
+      return
+    end
+    if State.move_buffer_down(selected_line_number) then
+      moved = true
+      new_cursor_line = selected_line_number + 1
+    end
   end
-  if State.move_buffer_down(selected_line_number) then
+
+  if moved then
     refresh_ui()
-    vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { selected_line_number + 1, 0 })
+    if new_cursor_line and BAFA_WIN_ID ~= nil then
+      local working_buffers = State.get_working_buffers()
+      new_cursor_line = math.min(new_cursor_line, #working_buffers)
+      vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { new_cursor_line, 0 })
+    end
   end
 end
 
@@ -432,10 +755,17 @@ end
 function M.toggle()
   if BAFA_WIN_ID ~= nil and vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
     close_window()
+    -- Restore cursor when closing the window
+    UiUtils.show_cursor()
     return
   end
 
+  -- Before creating the window, hide the cursor
+  UiUtils.hide_cursor()
+
   local win_info = create_window()
+  -- Enable cursorline for, otherwise, without a cursor, the user can't see the selection
+  UiUtils.enable_cursorline(win_info.win_id)
   BAFA_WIN_ID = win_info.win_id
   BAFA_BUF_ID = win_info.bufnr
 
@@ -443,7 +773,9 @@ function M.toggle()
   local valid_buffers = BufferUtils.get_buffers_as_table()
   State.init(valid_buffers)
 
-  vim.wo[BAFA_WIN_ID].number = true
+  -- Set line numbers based on config
+  local bafa_config = Config.get()
+  vim.wo[BAFA_WIN_ID].number = bafa_config.line_numbers or false
   vim.api.nvim_buf_set_name(BAFA_BUF_ID, "bafa-menu")
   vim.bo[BAFA_BUF_ID].buftype = "nofile"
   vim.bo[BAFA_BUF_ID].bufhidden = "delete"
@@ -451,9 +783,19 @@ function M.toggle()
   -- Refresh UI from state
   refresh_ui()
 
-  Keymaps.noop(BAFA_BUF_ID)
-  Keymaps.defaults(BAFA_BUF_ID)
-  Autocmds.defaults(BAFA_BUF_ID)
+  -- Restore cursor line position (only in manual mode, with bounds checking)
+  local working_buffers = State.get_working_buffers()
+  local max_line = #working_buffers
+  if max_line > 0 then
+    local saved_cursor_line = State.get_persisted_cursor_line(max_line)
+    if saved_cursor_line ~= nil and BAFA_WIN_ID ~= nil then
+      vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { saved_cursor_line, 0 })
+    end
+  end
+
+  Keymaps.noop(win_info.bufnr)
+  Keymaps.defaults(win_info.bufnr)
+  Autocmds.defaults(win_info.bufnr)
 
   -- Set up diagnostic autocmd to refresh UI when diagnostics change
   if Config.get().diagnostics then

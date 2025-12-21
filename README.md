@@ -55,16 +55,26 @@ require('lazy').setup({
   {
     'mistweaverco/bafa.nvim',
     opts = {
-      width = 60,
-      height = 10,
       title = "Bafa",
       title_pos = "center",
       relative = "editor",
       border = "rounded",
       style = "minimal",
-      diagnostics = true,
+      diagnostics = true, -- Show diagnostics in the buffer list
+      line_numbers = false, -- Show line numbers in the buffer list
+      icons = {
+        diagnostics = {
+          Error = "",   -- Icon for error diagnostics
+          Warn = "",    -- Icon for warning diagnostics
+          Info = "",    -- Icon for info diagnostics
+          Hint = "",    -- Icon for hint diagnostics
+        },
+      },
       -- or "ErrorMsg", "WarningMsg", etc. -- Falls back to WarningMsg if the specified highlight group doesn't exist
       modified_hl = "DiffChanged",
+      notify = {
+        provider = "notify", -- "notify" or "print"
+      },
     }
   },
 })

@@ -233,6 +233,71 @@ function M.move_buffer_down(idx)
   return true
 end
 
+---Move a range of buffers up as a block
+---When moving up, the item above the range moves to the bottom of the range
+---Example: [1, 2, 3, 4] with selection [2, 3, 4] -> [2, 3, 4, 1]
+---@param start_idx number: Start index of the range (1-indexed, inclusive)
+---@param end_idx number: End index of the range (1-indexed, inclusive)
+---@returns boolean: True if moved, false if not (e.g., at top)
+function M.move_buffer_range_up(start_idx, end_idx)
+  if
+    start_idx <= 1
+    or start_idx > #state.working_buffers
+    or end_idx > #state.working_buffers
+    or start_idx > end_idx
+  then
+    return false
+  end
+
+  -- Extract the range to move and the item above
+  local range = {}
+  for i = start_idx, end_idx do
+    table.insert(range, state.working_buffers[i])
+  end
+  local item_above = state.working_buffers[start_idx - 1]
+
+  -- Place range at new position (shifted up by 1)
+  for i = 0, #range - 1 do
+    state.working_buffers[start_idx - 1 + i] = range[i + 1]
+  end
+
+  -- Place item_above at the end of where the range was
+  state.working_buffers[end_idx] = item_above
+
+  save_current_to_history()
+  return true
+end
+
+---Move a range of buffers down as a block
+---When moving down, the item below the range moves to the top of the range
+---Example: [1, 2, 3, 4] with selection [1, 2, 3] -> [4, 1, 2, 3]
+---@param start_idx number: Start index of the range (1-indexed, inclusive)
+---@param end_idx number: End index of the range (1-indexed, inclusive)
+---@returns boolean: True if moved, false if not (e.g., at bottom)
+function M.move_buffer_range_down(start_idx, end_idx)
+  if start_idx < 1 or end_idx >= #state.working_buffers or start_idx > end_idx then
+    return false
+  end
+
+  -- Extract the range to move and the item below
+  local range = {}
+  for i = start_idx, end_idx do
+    table.insert(range, state.working_buffers[i])
+  end
+  local item_below = state.working_buffers[end_idx + 1]
+
+  -- Place item_below at the start of where the range was
+  state.working_buffers[start_idx] = item_below
+
+  -- Place range at new position (shifted down by 1)
+  for i = 0, #range - 1 do
+    state.working_buffers[start_idx + 1 + i] = range[i + 1]
+  end
+
+  save_current_to_history()
+  return true
+end
+
 ---Add buffer to list
 ---@param buffer BafaBuffer: Buffer to add
 ---@returns boolean: True if added
@@ -247,6 +312,10 @@ end
 ---@returns BafaBuffer|nil Buffer at index or nil if out of bounds
 function M.get_buffer_at_index(idx)
   return state.working_buffers[idx]
+end
+
+function M.is_working_buffers_empty()
+  return #state.working_buffers == 0
 end
 
 -- Undo last change
@@ -327,6 +396,60 @@ function M.set_persisted_sorting(sorting)
     return
   end
   kikao_api.set_value({ key = "plugins.bafa.sorting", value = state.sorting })
+end
+
+---Save cursor line position (only in manual mode)
+---@param cursor_line number|nil The cursor line to save (1-indexed)
+---@returns nil
+function M.save_cursor_line(cursor_line)
+  -- Only save in manual mode
+  if M.get_persisted_sorting() ~= Types.BafaSorting.MANUAL then
+    return
+  end
+
+  if cursor_line == nil or cursor_line < 1 then
+    return
+  end
+
+  local kikao_ok, kikao_api = pcall(require, "kikao.api")
+  if not kikao_ok then
+    Logger.warn(
+      "kikao.nvim not found, can only persist cursor line in volatile state (in-memory)",
+      "See: " .. KIKAO_URL
+    )
+    return
+  end
+  kikao_api.set_value({ key = "plugins.bafa.cursor_line", value = cursor_line })
+end
+
+---Get persisted cursor line position (only in manual mode)
+---If kikao.nvim is not installed, returns nil
+---@param max_line number|nil Maximum valid line number (for bounds checking)
+---@returns number|nil The cursor line (1-indexed) or nil if not set or out of bounds
+function M.get_persisted_cursor_line(max_line)
+  -- Only restore in manual mode
+  if M.get_persisted_sorting() ~= Types.BafaSorting.MANUAL then
+    return nil
+  end
+
+  local kikao_ok, kikao_api = pcall(require, "kikao.api")
+  if not kikao_ok then
+    return nil
+  end
+
+  local cursor_line = kikao_api.get_value({ key = "plugins.bafa.cursor_line" })
+  if cursor_line == nil or type(cursor_line) ~= "number" then
+    return nil
+  end
+
+  -- Bounds checking
+  if max_line ~= nil then
+    if cursor_line < 1 or cursor_line > max_line then
+      return nil
+    end
+  end
+
+  return cursor_line
 end
 
 return M
