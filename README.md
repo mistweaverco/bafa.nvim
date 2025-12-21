@@ -57,7 +57,6 @@ require('lazy').setup({
     opts = {
       title = "Bafa",
       title_pos = "center",
-      relative = "editor",
       border = "rounded",
       style = "minimal",
       diagnostics = true, -- Show diagnostics in the buffer list
