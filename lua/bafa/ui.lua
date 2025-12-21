@@ -194,6 +194,13 @@ local function close_window()
   if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
     return
   end
+
+  -- Save cursor line position (only in manual mode)
+  local cursor_pos = vim.api.nvim_win_get_cursor(BAFA_WIN_ID)
+  if cursor_pos and cursor_pos[1] then
+    State.save_cursor_line(cursor_pos[1])
+  end
+
   vim.api.nvim_win_close(BAFA_WIN_ID, true)
   BAFA_WIN_ID = nil
   BAFA_BUF_ID = nil
@@ -775,6 +782,16 @@ function M.toggle()
 
   -- Refresh UI from state
   refresh_ui()
+
+  -- Restore cursor line position (only in manual mode, with bounds checking)
+  local working_buffers = State.get_working_buffers()
+  local max_line = #working_buffers
+  if max_line > 0 then
+    local saved_cursor_line = State.get_persisted_cursor_line(max_line)
+    if saved_cursor_line ~= nil and BAFA_WIN_ID ~= nil then
+      vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { saved_cursor_line, 0 })
+    end
+  end
 
   Keymaps.noop(win_info.bufnr)
   Keymaps.defaults(win_info.bufnr)

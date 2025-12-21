@@ -398,4 +398,58 @@ function M.set_persisted_sorting(sorting)
   kikao_api.set_value({ key = "plugins.bafa.sorting", value = state.sorting })
 end
 
+---Save cursor line position (only in manual mode)
+---@param cursor_line number|nil The cursor line to save (1-indexed)
+---@returns nil
+function M.save_cursor_line(cursor_line)
+  -- Only save in manual mode
+  if M.get_persisted_sorting() ~= Types.BafaSorting.MANUAL then
+    return
+  end
+
+  if cursor_line == nil or cursor_line < 1 then
+    return
+  end
+
+  local kikao_ok, kikao_api = pcall(require, "kikao.api")
+  if not kikao_ok then
+    Logger.warn(
+      "kikao.nvim not found, can only persist cursor line in volatile state (in-memory)",
+      "See: " .. KIKAO_URL
+    )
+    return
+  end
+  kikao_api.set_value({ key = "plugins.bafa.cursor_line", value = cursor_line })
+end
+
+---Get persisted cursor line position (only in manual mode)
+---If kikao.nvim is not installed, returns nil
+---@param max_line number|nil Maximum valid line number (for bounds checking)
+---@returns number|nil The cursor line (1-indexed) or nil if not set or out of bounds
+function M.get_persisted_cursor_line(max_line)
+  -- Only restore in manual mode
+  if M.get_persisted_sorting() ~= Types.BafaSorting.MANUAL then
+    return nil
+  end
+
+  local kikao_ok, kikao_api = pcall(require, "kikao.api")
+  if not kikao_ok then
+    return nil
+  end
+
+  local cursor_line = kikao_api.get_value({ key = "plugins.bafa.cursor_line" })
+  if cursor_line == nil or type(cursor_line) ~= "number" then
+    return nil
+  end
+
+  -- Bounds checking
+  if max_line ~= nil then
+    if cursor_line < 1 or cursor_line > max_line then
+      return nil
+    end
+  end
+
+  return cursor_line
+end
+
 return M
