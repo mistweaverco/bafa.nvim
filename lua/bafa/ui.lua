@@ -509,13 +509,35 @@ function M.move_buffer_up()
     -- Move range as a block
     local start_idx = math.min(unpack(selected_indices))
     local end_idx = math.max(unpack(selected_indices))
+    local range_size = end_idx - start_idx + 1
 
     if State.move_buffer_range_up(start_idx, end_idx) then
-      moved = true
-      -- Cursor stays at the start of the selection (which moved up by 1)
-      new_cursor_line = math.max(1, start_idx - 1)
-      -- Exit visual mode after moving
-      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", true)
+      -- Calculate new selection positions (moved up by 1)
+      local new_start_idx = math.max(1, start_idx - 1)
+      local new_end_idx = new_start_idx + range_size - 1
+
+      -- Refresh UI first to update buffer contents
+      refresh_ui()
+
+      -- Restore visual selection at new positions
+      -- Use a deferred callback to ensure UI is refreshed first
+      vim.schedule(function()
+        if
+          BAFA_WIN_ID ~= nil
+          and vim.api.nvim_win_is_valid(BAFA_WIN_ID)
+          and BAFA_BUF_ID ~= nil
+          and vim.api.nvim_buf_is_valid(BAFA_BUF_ID)
+        then
+          -- Set visual selection marks (bufnum, lnum, col, off)
+          vim.fn.setpos("'<", { BAFA_BUF_ID, new_start_idx, 1, 0 })
+          vim.fn.setpos("'>", { BAFA_BUF_ID, new_end_idx, 1, 0 })
+          -- Set cursor to start of selection
+          vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { new_start_idx, 0 })
+          -- Re-enter visual mode
+          vim.cmd("normal! gv")
+        end
+      end)
+      return -- Early return since refresh_ui is called above
     end
   else
     -- Single buffer move
@@ -560,13 +582,38 @@ function M.move_buffer_down()
     -- Move range as a block
     local start_idx = math.min(unpack(selected_indices))
     local end_idx = math.max(unpack(selected_indices))
+    local range_size = end_idx - start_idx + 1
 
     if State.move_buffer_range_down(start_idx, end_idx) then
-      moved = true
-      -- Cursor stays at the start of the selection (which moved down by 1)
-      new_cursor_line = start_idx + 1
-      -- Exit visual mode after moving
-      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", true)
+      -- Calculate new selection positions (moved down by 1)
+      local new_start_idx = start_idx + 1
+      local new_end_idx = new_start_idx + range_size - 1
+
+      -- Refresh UI first to update buffer contents
+      refresh_ui()
+
+      -- Restore visual selection at new positions
+      -- Use a deferred callback to ensure UI is refreshed first
+      vim.schedule(function()
+        if
+          BAFA_WIN_ID ~= nil
+          and vim.api.nvim_win_is_valid(BAFA_WIN_ID)
+          and BAFA_BUF_ID ~= nil
+          and vim.api.nvim_buf_is_valid(BAFA_BUF_ID)
+        then
+          local working_buffers = State.get_working_buffers()
+          -- Clamp to valid range
+          new_end_idx = math.min(new_end_idx, #working_buffers)
+          -- Set visual selection marks (bufnum, lnum, col, off)
+          vim.fn.setpos("'<", { BAFA_BUF_ID, new_start_idx, 1, 0 })
+          vim.fn.setpos("'>", { BAFA_BUF_ID, new_end_idx, 1, 0 })
+          -- Set cursor to start of selection
+          vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { new_start_idx, 0 })
+          -- Re-enter visual mode
+          vim.cmd("normal! gv")
+        end
+      end)
+      return -- Early return since refresh_ui is called above
     end
   else
     -- Single buffer move
