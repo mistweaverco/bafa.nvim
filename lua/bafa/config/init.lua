@@ -31,7 +31,15 @@ M.config_defaults = {
   line_numbers = false,
   log_level = Types.BafaLoggerLogLevelNames.error,
   notify = {
-    provider = Types.BafaConfigNotifyProvider.nvim_notify,
+    provider = Types.BafaConfigNotifyProvider.notify,
+  },
+  icons = {
+    diagnostics = {
+      Error = "", -- Icon for error diagnostics
+      Warn = "", -- Icon for warning diagnostics
+      Info = "", -- Icon for info diagnostics
+      Hint = "", -- Icon for hint diagnostics
+    },
   },
 }
 

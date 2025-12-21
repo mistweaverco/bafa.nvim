@@ -60,7 +60,7 @@ M.BafaConfigStyle = {
 
 ---@enum BafaConfigNotifyProvider
 M.BafaConfigNotifyProvider = {
-  nvim_notify = "nvim_notify",
+  notify = "notify",
   print = "print",
 }
 

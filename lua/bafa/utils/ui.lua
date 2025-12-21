@@ -1,7 +1,6 @@
 local M = {}
 
 local ORIGINAL_CURSORS = vim.opt.guicursor
-local ORIGINAL_CURSORLINE = vim.opt.cursorline
 local CURSOR_LINE_HL = vim.api.nvim_get_hl(0, { name = "CursorLine", link = true })
 local CURSOR_LINE_BG = CURSOR_LINE_HL.bg or "NONE"
 

@@ -32,6 +32,55 @@ local function get_diagnostics(bufnr)
   return diags
 end
 
+--- Calculate the width needed for line numbers column
+---@param line_count number The number of lines
+---@return number The width needed for the number column (0 if line numbers are off)
+local function get_number_column_width(line_count)
+  local bafa_config = Config.get()
+  if not bafa_config.line_numbers then
+    return 0
+  end
+  if line_count == 0 then
+    return 0
+  end
+  -- Calculate digits needed for the largest line number
+  local digits = math.floor(math.log10(line_count)) + 1
+  -- Number column width: digits + spacing (typically 1-2 spaces)
+  return digits + 2
+end
+
+--- Calculate the width needed for diagnostics icons
+---@param buffers table[] Array of buffer objects
+---@return number The width needed for diagnostics (0 if diagnostics are disabled)
+local function get_diagnostics_width(buffers)
+  local bafa_config = Config.get()
+  if not bafa_config.diagnostics then
+    return 0
+  end
+
+  local max_diagnostics_width = 0
+  for _, buffer in ipairs(buffers) do
+    if buffer and buffer.number and vim.api.nvim_buf_is_valid(buffer.number) then
+      local diags = get_diagnostics(buffer.number)
+      if #diags > 0 then
+        -- Build the full diagnostic string as it would appear (all diagnostics concatenated)
+        local full_diag_string = ""
+        for _, diagnostic in ipairs(diags) do
+          full_diag_string = full_diag_string .. diagnostic[1]
+        end
+        -- Calculate the actual display width of the concatenated diagnostics
+        local total_width = vim.fn.strdisplaywidth(full_diag_string)
+        if total_width > max_diagnostics_width then
+          max_diagnostics_width = total_width
+        end
+      end
+    end
+  end
+
+  -- Add padding for spacing between diagnostics and buffer name
+  return max_diagnostics_width > 0 and max_diagnostics_width + 2 or 0
+end
+
 local get_buffer_icon = function(buffer)
   if Devicons == nil then
     return "", "Normal" -- fallback to default icon, when devicons is not available
@@ -145,8 +194,6 @@ local function refresh_ui()
   --- or we are trying to set lines in a non-modifiable buffer.
   pcall(vim.api.nvim_buf_set_lines, BAFA_BUF_ID, 0, -1, false, contents)
 
-  local count_max_diagnostics = 0
-
   -- Calculate longest buffer name for width calculation
   local longest_buffer_name = 0
   for _, buffer in ipairs(working_buffers) do
@@ -163,22 +210,18 @@ local function refresh_ui()
     add_modified_highlight(idx, buffer)
     -- add diagnostics
     if Config.get().diagnostics then
-      local diag_count = add_diagnostics_icons(idx, buffer)
-      if diag_count > 0 then
-        if diag_count > count_max_diagnostics then
-          count_max_diagnostics = diag_count
-        end
-      end
+      add_diagnostics_icons(idx, buffer)
     end
   end
 
   -- Update window width if needed
-  local base_width = longest_buffer_name + 10 -- space for `:set number`, 2 spaces, icon and a space
-  if count_max_diagnostics > 0 then
-    base_width = base_width + (count_max_diagnostics * 2) -- each diagnostic icon takes approx 2 spaces
-  end
-  local needed_width = math.min(MAIN_WINDOW_WIDTH, base_width)
   local bafa_config = Config.get()
+  local number_column_width = get_number_column_width(#working_buffers)
+  local diagnostics_width = get_diagnostics_width(working_buffers)
+  local base_width = longest_buffer_name + 4 -- space for 2 spaces, icon and a space
+  base_width = base_width + number_column_width -- add number column width if enabled
+  base_width = base_width + diagnostics_width -- add diagnostics width if enabled
+  local needed_width = math.min(MAIN_WINDOW_WIDTH, base_width)
   -- Only update width if it's not manually set in config
   if bafa_config.width == nil then
     local current_width = vim.api.nvim_win_get_width(BAFA_WIN_ID)
@@ -208,8 +251,12 @@ local function create_window()
   local max_height = vim.api.nvim_win_get_height(0)
   local buffer_longest_name_width = BufferUtils.get_width_longest_buffer_name()
   local buffer_lines = BufferUtils.get_lines_buffer_names()
-  -- preserve space for the icons
-  local width = math.min(max_width, buffer_longest_name_width + 10)
+  -- Get buffers for diagnostics width calculation
+  local buffers = BufferUtils.get_buffers_as_table()
+  -- Calculate width: buffer name + number column (if enabled) + diagnostics (if enabled) + icon spacing
+  local number_column_width = get_number_column_width(buffer_lines)
+  local diagnostics_width = get_diagnostics_width(buffers)
+  local width = math.min(max_width, buffer_longest_name_width + 4 + number_column_width + diagnostics_width)
   local height = math.min(max_height, buffer_lines + 2)
 
   BAFA_WIN_ID = vim.api.nvim_open_win(bufnr, true, {
@@ -451,7 +498,9 @@ function M.toggle()
   local valid_buffers = BufferUtils.get_buffers_as_table()
   State.init(valid_buffers)
 
-  vim.wo[BAFA_WIN_ID].number = true
+  -- Set line numbers based on config
+  local bafa_config = Config.get()
+  vim.wo[BAFA_WIN_ID].number = bafa_config.line_numbers or false
   vim.api.nvim_buf_set_name(BAFA_BUF_ID, "bafa-menu")
   vim.bo[BAFA_BUF_ID].buftype = "nofile"
   vim.bo[BAFA_BUF_ID].bufhidden = "delete"

@@ -17,4 +17,5 @@ globals = {
   "vim.wo",
   "vim.go",
   "vim.env",
+  "vim.opt",
 }
