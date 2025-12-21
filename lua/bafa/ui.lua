@@ -248,6 +248,7 @@ local function refresh_ui()
     if Config.get().diagnostics then
       add_diagnostics_icons(idx, buffer)
     end
+    -- Visual selection highlighting is handled by Neovim's built-in visual mode
   end
 
   -- Update window width and height if needed, and re-center
@@ -373,34 +374,111 @@ function M.select_menu_item()
   end
 end
 
+---Get selected buffer indices (either visual selection or single cursor position)
+---@return number[] Array of selected line indices (1-indexed)
+local function get_selected_indices()
+  local indices = {}
+  local mode = vim.fn.mode()
+
+  -- Check if we're in visual mode (v, V, or Ctrl-v)
+  if mode:match("[vV]") then
+    -- Get visual selection range while still in visual mode
+    -- Use line("v") for the start of visual selection and line(".") for current position
+    local start_line = vim.fn.line("v")
+    local end_line = vim.fn.line(".")
+    local working_buffers = State.get_working_buffers()
+
+    -- Ensure valid range
+    start_line = math.max(1, math.min(start_line, #working_buffers))
+    end_line = math.max(1, math.min(end_line, #working_buffers))
+
+    -- Get all lines in selection
+    local min_line = math.min(start_line, end_line)
+    local max_line = math.max(start_line, end_line)
+
+    for i = min_line, max_line do
+      table.insert(indices, i)
+    end
+  else
+    -- Normal mode: just the current line
+    local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
+    if selected_line_number >= 1 then
+      table.insert(indices, selected_line_number)
+    end
+  end
+
+  return indices
+end
+
 ---Delete buffer (dd key or D key in normal mode)
+---Deletes selected buffers in visual mode, or single buffer in normal mode
 ---@returns nil
 function M.delete_menu_item()
   if BAFA_BUF_ID == nil or not vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then
     return
   end
 
-  local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
-  local selected_buffer = State.get_buffer_at_index(selected_line_number)
-  if selected_buffer == nil then
+  -- Get selection before exiting visual mode (if in visual mode)
+  local was_in_visual_mode = false
+  local mode = vim.fn.mode()
+  if mode:match("[vV]") then
+    was_in_visual_mode = true
+  end
+
+  local selected_indices = get_selected_indices()
+
+  -- Exit visual mode if we were in it (before processing deletion)
+  if was_in_visual_mode then
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", true)
+  end
+
+  if #selected_indices == 0 then
     return
   end
 
-  -- Check if buffer is modified and ask for confirmation
-  if vim.api.nvim_buf_is_valid(selected_buffer.number) and vim.bo[selected_buffer.number].modified then
-    local choice = vim.fn.inputlist({ "Buffer is modified. Delete anyway?", "Yes", "No" })
+  local working_buffers = State.get_working_buffers()
+
+  -- Check if any buffers are modified and ask for confirmation
+  local modified_buffers = {}
+  for _, idx in ipairs(selected_indices) do
+    local buffer = working_buffers[idx]
+    if buffer and vim.api.nvim_buf_is_valid(buffer.number) and vim.bo[buffer.number].modified then
+      table.insert(modified_buffers, buffer.name)
+    end
+  end
+
+  if #modified_buffers > 0 then
+    local message = string.format("%d buffer(s) are modified. Delete anyway?", #modified_buffers)
+    if #modified_buffers == 1 then
+      message = string.format('Buffer "%s" is modified. Delete anyway?', modified_buffers[1])
+    end
+    local choice = vim.fn.inputlist({ message, "Yes", "No" })
     if choice ~= 1 then
       return
     end
   end
 
-  -- Remove from state (this caches the deletion)
-  if State.delete_buffer_at_index(selected_line_number) then
+  -- Delete buffers in reverse order to maintain correct indices
+  table.sort(selected_indices, function(a, b)
+    return a > b
+  end)
+
+  local deleted_count = 0
+  for _, idx in ipairs(selected_indices) do
+    if State.delete_buffer_at_index(idx) then
+      deleted_count = deleted_count + 1
+    end
+  end
+
+  if deleted_count > 0 then
     refresh_ui()
-    -- Move cursor if we deleted the last item
-    local working_buffers = State.get_working_buffers()
-    if selected_line_number > #working_buffers and #working_buffers > 0 and BAFA_WIN_ID ~= nil then
-      vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { #working_buffers, 0 })
+
+    -- Move cursor if we deleted the last item(s)
+    local new_working_buffers = State.get_working_buffers()
+    if #new_working_buffers > 0 and BAFA_WIN_ID ~= nil then
+      local max_line = math.max(unpack(selected_indices))
+      local new_cursor_line = math.min(max_line, #new_working_buffers)
+      vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { new_cursor_line, 0 })
     end
   end
 end
