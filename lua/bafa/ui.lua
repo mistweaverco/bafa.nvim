@@ -16,18 +16,52 @@ local BAFA_WIN_ID = nil
 local BAFA_BUF_ID = nil
 ---@type number|nil
 local BAFA_DIAGNOSTIC_AUTOCMD_ID = nil
-local MAIN_WINDOW_WIDTH = vim.api.nvim_win_get_width(0)
 
 local DIAGNOSTICS_LABELS = { "Error", "Warn", "Info", "Hint" }
-local DIAGNOSTICS_SIGNS = { " ", " ", " ", " " }
 
+---@class BafaDiagnosticInfo
+---@field count number
+---@field icon string
+---@field hl_group string
+
+---Get diagnostics for a buffer
+---@param bufnr number The buffer number
+---@return BafaDiagnosticInfo[] Array of diagnostics info
 local function get_diagnostics(bufnr)
   local count = vim.diagnostic.count(bufnr)
   local diags = {}
+  local bafa_config = Config.get()
+  local icons = bafa_config.icons and bafa_config.icons.diagnostics or {}
+
+  -- Default fallback icons
+  -- These will be used if no sign is defined and no icon is set in config
+  -- Matches DIAGNOSTICS_LABELS order
+  local default_icons = { " ", " ", " ", " " }
+
   for k, v in pairs(count) do
-    local defined_sign = vim.fn.sign_getdefined("DiagnosticSign" .. DIAGNOSTICS_LABELS[k])
-    local sign_icon = #defined_sign ~= 0 and defined_sign[1].text or DIAGNOSTICS_SIGNS[k]
-    table.insert(diags, { tostring(v) .. sign_icon, "DiagnosticSign" .. DIAGNOSTICS_LABELS[k] })
+    local label = DIAGNOSTICS_LABELS[k]
+    local defined_sign = vim.fn.sign_getdefined("DiagnosticSign" .. label)
+    local sign_icon
+
+    if #defined_sign ~= 0 then
+      sign_icon = defined_sign[1].text
+    elseif icons[label] then
+      sign_icon = icons[label]
+    else
+      -- Fallback to default icons if config doesn't have them
+      sign_icon = default_icons[k] or " "
+    end
+
+    -- Ensure icon has a space after it for proper spacing
+    if sign_icon:sub(-1) ~= " " then
+      sign_icon = sign_icon .. " "
+    end
+
+    table.insert(diags, {
+      count = v,
+      icon = sign_icon,
+      hl_group = "DiagnosticSign" .. label,
+    })
   end
   return diags
 end
@@ -51,7 +85,7 @@ end
 
 --- Calculate the width needed for diagnostics icons
 ---@param buffers table[] Array of buffer objects
----@return number The width needed for diagnostics (0 if diagnostics are disabled)
+---@return number max_diagnostics_width The width needed for diagnostics (0 if diagnostics are disabled)
 local function get_diagnostics_width(buffers)
   local bafa_config = Config.get()
   if not bafa_config.diagnostics then
@@ -66,7 +100,7 @@ local function get_diagnostics_width(buffers)
         -- Build the full diagnostic string as it would appear (all diagnostics concatenated)
         local full_diag_string = ""
         for _, diagnostic in ipairs(diags) do
-          full_diag_string = full_diag_string .. diagnostic[1]
+          full_diag_string = full_diag_string .. " " .. diagnostic.count .. " " .. diagnostic.icon
         end
         -- Calculate the actual display width of the concatenated diagnostics
         local total_width = vim.fn.strdisplaywidth(full_diag_string)
@@ -76,9 +110,7 @@ local function get_diagnostics_width(buffers)
       end
     end
   end
-
-  -- Add padding for spacing between diagnostics and buffer name
-  return max_diagnostics_width > 0 and max_diagnostics_width + 2 or 0
+  return max_diagnostics_width > 0 and max_diagnostics_width or 0
 end
 
 local get_buffer_icon = function(buffer)
@@ -141,13 +173,17 @@ end
 ---@return number count of diagnostics added
 local add_diagnostics_icons = function(idx, buffer)
   if BAFA_BUF_ID == nil then
-    return
+    return 0
   end
   local count_diagnostics = 0
   local diags = get_diagnostics(buffer.number)
   for _, diagnostic in ipairs(diags) do
     vim.api.nvim_buf_set_extmark(BAFA_BUF_ID, BAFA_NS_ID, idx - 1, 0, {
-      virt_text = { { diagnostic[1], diagnostic[2] } },
+      virt_text = {
+        { tostring(diagnostic.count), diagnostic.hl_group },
+        { " ", diagnostic.hl_group },
+        { diagnostic.icon, diagnostic.hl_group },
+      },
     })
     count_diagnostics = count_diagnostics + 1
   end
@@ -214,32 +250,60 @@ local function refresh_ui()
     end
   end
 
-  -- Update window width if needed
-  local bafa_config = Config.get()
+  -- Update window width and height if needed, and re-center
   local number_column_width = get_number_column_width(#working_buffers)
   local diagnostics_width = get_diagnostics_width(working_buffers)
-  local base_width = longest_buffer_name + 4 -- space for 2 spaces, icon and a space
+  local base_width = longest_buffer_name + 6 -- space for icon and padding
   base_width = base_width + number_column_width -- add number column width if enabled
-  base_width = base_width + diagnostics_width -- add diagnostics width if enabled
-  local needed_width = math.min(MAIN_WINDOW_WIDTH, base_width)
-  -- Only update width if it's not manually set in config
-  if bafa_config.width == nil then
-    local current_width = vim.api.nvim_win_get_width(BAFA_WIN_ID)
-    if needed_width ~= current_width then
-      vim.api.nvim_win_set_width(BAFA_WIN_ID, needed_width)
-    end
+  if diagnostics_width > 0 then
+    -- this is 4, because we have 2 spaces at the beginning of each row,
+    -- then the icon and the buffer name
+    -- when we have diagnostics enabled,
+    -- we have 1 space before diagnostics and 1 space after diagnostics
+    -- plus the 2 spaces at the end to match the beginning of the line
+    -- so total of 4 spaces
+    base_width = base_width + 4 -- some padding
   end
 
-  -- Update window height if needed
-  local max_height = vim.api.nvim_win_get_height(0)
-  local needed_height = #working_buffers + 2
-  local new_height = math.min(needed_height, max_height)
-  -- Only update height if it's not manually set in config
-  if bafa_config.height == nil then
-    local current_height = vim.api.nvim_win_get_height(BAFA_WIN_ID)
-    if new_height ~= current_height then
-      vim.api.nvim_win_set_height(BAFA_WIN_ID, new_height)
-    end
+  -- Get parent window dimensions based on relative setting
+  local max_width = vim.o.columns
+  local max_height = vim.o.lines
+
+  -- Calculate needed dimensions, ensuring they don't exceed parent window
+  local needed_width = math.min(max_width, base_width)
+  local needed_height = math.min(max_height, #working_buffers)
+
+  -- Ensure dimensions don't exceed parent window (safety check)
+  needed_width = math.min(needed_width, max_width)
+  needed_height = math.min(needed_height, max_height)
+
+  -- Update window dimensions if not manually set in config
+  local width_changed = false
+  local height_changed = false
+  local current_width = vim.api.nvim_win_get_width(BAFA_WIN_ID)
+  if needed_width ~= current_width then
+    vim.api.nvim_win_set_width(BAFA_WIN_ID, needed_width)
+    width_changed = true
+  end
+
+  local current_height = vim.api.nvim_win_get_height(BAFA_WIN_ID)
+  if needed_height ~= current_height then
+    vim.api.nvim_win_set_height(BAFA_WIN_ID, needed_height)
+    height_changed = true
+  end
+
+  -- Re-center the window after size changes (only if relative is "editor")
+  if width_changed or height_changed then
+    local final_width = needed_width
+    local final_height = needed_height
+    local row = math.floor((max_height - final_height) / 2) - 1
+    local col = math.floor((max_width - final_width) / 2)
+
+    vim.api.nvim_win_set_config(BAFA_WIN_ID, {
+      relative = "editor",
+      row = row,
+      col = col,
+    })
   end
 end
 
@@ -261,17 +325,18 @@ local function create_window()
 
   BAFA_WIN_ID = vim.api.nvim_open_win(bufnr, true, {
     title = bafa_config.title,
+    ---@type BafaConfigTitlesPos
     title_pos = bafa_config.title_pos,
-    relative = bafa_config.relative,
+    relative = "editor",
+    ---@type BafaConfigBorder
     border = bafa_config.border,
-    width = bafa_config.width or width,
-    height = bafa_config.height or height,
-    row = math.floor(((vim.o.lines - (bafa_config.height or height)) / 2) - 1),
-    col = math.floor((vim.o.columns - (bafa_config.width or width)) / 2),
+    width = width,
+    height = height,
+    row = math.floor(((vim.o.lines - height) / 2) - 1),
+    col = math.floor((vim.o.columns - width) / 2),
+    ---@type BafaConfigStyle
     style = bafa_config.style,
   })
-
-  -- NormalFloat will be used by default for floating windows, respecting user's theme
 
   return {
     bufnr = bufnr,
@@ -322,7 +387,7 @@ function M.delete_menu_item()
     refresh_ui()
     -- Move cursor if we deleted the last item
     local working_buffers = State.get_working_buffers()
-    if selected_line_number > #working_buffers and #working_buffers > 0 then
+    if selected_line_number > #working_buffers and #working_buffers > 0 and BAFA_WIN_ID ~= nil then
       vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { #working_buffers, 0 })
     end
   end

@@ -23,7 +23,6 @@ M.plugin_name = "bafa.nvim"
 M.config_defaults = {
   title = "Bafa",
   title_pos = "center",
-  relative = "editor",
   border = "rounded",
   style = "minimal",
   diagnostics = true,

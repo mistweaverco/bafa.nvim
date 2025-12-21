@@ -34,13 +34,6 @@ M.BafaConfigTitlesPos = {
   right = "right",
 }
 
----@enum BafaConfigRelative
-M.BafaConfigRelative = {
-  editor = "editor",
-  cursor = "cursor",
-  win = "win",
-}
-
 ---@enum BafaConfigBorder
 M.BafaConfigBorder = {
   none = "none",
@@ -71,10 +64,18 @@ M.BafaConfigNotifyProvider = {
 ---@class BafaConfigNotify
 ---@field provider BafaConfigNotifyProvider
 
+---@class BafaConfigIconsDiagnostics
+---@field Error string
+---@field Warn string
+---@field Info string
+---@field Hint string
+
+---@class BafaConfigIcons
+---@field diagnostics BafaConfigIconsDiagnostics
+
 ---@class BafaDefaultConfig
 ---@field title string
 ---@field title_pos BafaConfigTitlesPos
----@field relative BafaConfigRelative
 ---@field border BafaConfigBorder
 ---@field style BafaConfigStyle
 ---@field diagnostics boolean
@@ -82,11 +83,11 @@ M.BafaConfigNotifyProvider = {
 ---@field line_numbers boolean
 ---@field log_level BafaLoggerLogLevelNames
 ---@field notify BafaConfigNotify
+---@field icons BafaConfigIcons
 
 ---@class BafaUserConfig
 ---@field title string|nil
 ---@field title_pos BafaConfigTitlesPos|nil
----@field relative BafaConfigRelative|nil
 ---@field border BafaConfigBorder|nil
 ---@field style BafaConfigStyle|nil
 ---@field diagnostics boolean|nil
@@ -94,6 +95,7 @@ M.BafaConfigNotifyProvider = {
 ---@field line_numbers boolean|nil
 ---@field log_level BafaLoggerLogLevelNames|nil
 ---@field notify BafaConfigNotify|nil
+---@field icons BafaConfigIcons|nil
 
 ---@class BafaState
 ---@field sorting BafaSorting|nil
