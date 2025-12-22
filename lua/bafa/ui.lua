@@ -824,7 +824,6 @@ function M.toggle()
     end
   end
 
-  Keymaps.noop(win_info.bufnr)
   Keymaps.defaults(win_info.bufnr)
   Autocmds.defaults(win_info.bufnr)
 
