@@ -136,6 +136,7 @@ local add_ft_icon_highlight = function(idx, buffer)
   vim.api.nvim_buf_set_extmark(BAFA_BUF_ID, BAFA_NS_ID, idx - 1, 2, {
     end_col = 3,
     hl_group = hl_group,
+    hl_mode = "combine", -- Combine with visual selection instead of replacing it
   })
 end
 
@@ -164,6 +165,7 @@ local add_modified_highlight = function(idx, buffer)
   -- Use extmark to highlight from column 4 to end of line
   vim.api.nvim_buf_set_extmark(BAFA_BUF_ID, BAFA_NS_ID, idx - 1, 4, {
     hl_group = hl_name,
+    hl_mode = "combine", -- Combine with visual selection instead of replacing it
   })
 end
 
@@ -184,6 +186,8 @@ local add_diagnostics_icons = function(idx, buffer)
         { " ", diagnostic.hl_group },
         { diagnostic.icon, diagnostic.hl_group },
       },
+      virt_text_pos = "eol", -- Position at end of line (after padding)
+      hl_mode = "combine", -- Combine with visual selection instead of replacing it
     })
     count_diagnostics = count_diagnostics + 1
   end
@@ -226,23 +230,59 @@ local function refresh_ui()
 
   local working_buffers = State.get_working_buffers()
   local contents = {}
+  local bafa_config = Config.get()
+
+  -- First pass: build lines and calculate maximum display width
+  local max_display_width = 0
+  local line_display_widths = {}
 
   for idx, buffer in ipairs(working_buffers) do
     local icon, _ = get_buffer_icon(buffer)
-    contents[idx] = string.format("  %s %s", icon, buffer.name)
+    local base_line = string.format("  %s %s", icon, buffer.name)
+    local base_width = vim.fn.strdisplaywidth(base_line)
+
+    local diagnostics_width = 0
+    if bafa_config.diagnostics then
+      diagnostics_width = get_diagnostics_width({ buffer })
+    end
+
+    -- Total display width for this line (base + diagnostics)
+    local total_width = base_width + diagnostics_width
+    line_display_widths[idx] = total_width
+    if total_width > max_display_width then
+      max_display_width = total_width
+    end
   end
 
-  --- Safely set buffer lines
-  --- This is necessary to avoid errors when the buffer is modified externally,
-  --- or we are trying to set lines in a non-modifiable buffer.
+  -- Second pass: pad lines to match maximum width
+  for idx, buffer in ipairs(working_buffers) do
+    local icon, _ = get_buffer_icon(buffer)
+    local base_line = string.format("  %s %s", icon, buffer.name)
+    local current_width = line_display_widths[idx]
+    local padding_needed = max_display_width - current_width
+
+    -- Pad with spaces to match maximum width
+    if padding_needed > 0 then
+      contents[idx] = base_line .. string.rep(" ", padding_needed)
+    else
+      contents[idx] = base_line
+    end
+  end
+
+  -- Briefly make buffer modifiable to set lines
+  vim.bo[BAFA_BUF_ID].modifiable = true
+  --- This is necessary to avoid errors when the buffer is modified externally
   pcall(vim.api.nvim_buf_set_lines, BAFA_BUF_ID, 0, -1, false, contents)
+  -- Set buffer back to non-modifiable
+  vim.bo[BAFA_BUF_ID].modifiable = false
 
   -- Calculate longest buffer name for width calculation
   local longest_buffer_name = 0
   for _, buffer in ipairs(working_buffers) do
     local buffer_name_length = string.len(buffer.name)
-    if buffer_name_length > longest_buffer_name then
-      longest_buffer_name = buffer_name_length
+    local total_length = buffer_name_length + get_diagnostics_width({ buffer })
+    if total_length > longest_buffer_name then
+      longest_buffer_name = total_length
     end
   end
 
@@ -260,18 +300,8 @@ local function refresh_ui()
 
   -- Update window width and height if needed, and re-center
   local number_column_width = get_number_column_width(#working_buffers)
-  local diagnostics_width = get_diagnostics_width(working_buffers)
   local base_width = longest_buffer_name + 6 -- space for icon and padding
   base_width = base_width + number_column_width -- add number column width if enabled
-  if diagnostics_width > 0 then
-    -- this is 4, because we have 2 spaces at the beginning of each row,
-    -- then the icon and the buffer name
-    -- when we have diagnostics enabled,
-    -- we have 1 space before diagnostics and 1 space after diagnostics
-    -- plus the 2 spaces at the end to match the beginning of the line
-    -- so total of 4 spaces
-    base_width = base_width + 4 -- some padding
-  end
 
   -- Get parent window dimensions based on relative setting
   local max_width = vim.o.columns
@@ -317,7 +347,8 @@ end
 
 local function create_window()
   local bafa_config = Config.get()
-  local bufnr = vim.api.nvim_create_buf(false, false)
+  local bufnr = vim.api.nvim_create_buf(false, true)
+  vim.bo[bufnr].modifiable = false
 
   local max_width = vim.api.nvim_win_get_width(0)
   local max_height = vim.api.nvim_win_get_height(0)
@@ -756,12 +787,12 @@ function M.toggle()
   if BAFA_WIN_ID ~= nil and vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
     close_window()
     -- Restore cursor when closing the window
-    UiUtils.show_cursor()
+    UiUtils.revert_patches()
     return
   end
 
   -- Before creating the window, hide the cursor
-  UiUtils.hide_cursor()
+  UiUtils.apply_patches()
 
   local win_info = create_window()
   -- Enable cursorline for, otherwise, without a cursor, the user can't see the selection

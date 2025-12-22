@@ -13,7 +13,7 @@
 
 A minimal BufExplorer alternative for lazy people for your favorite editor.
 
-Bafa is swahili for "buffer".
+Bafa is swahili for "buffer."
 
 It allows you to quickly switch between buffers and delete them.
 
@@ -30,53 +30,93 @@ It allows you to quickly switch between buffers and delete them.
 - [Neovim](https://github.com/neovim/neovim) (tested with 0.9.0)
 
 > [!TIP]
-> For having fancy icons, you need to install a patched font.
-> You can find some patched fonts in the [Nerd Fonts](https://www.nerdfonts.com/) website.
-> Also you should consider installing [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons)
-> for having the correct icons based on the ft in the buffer list.
+> You need to install a patched nerd-font for
+> having the icons displayed correctly.
+> You can find some patched fonts on the [Nerd Fonts](https://www.nerdfonts.com/) website.
+> You should also consider installing [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons)
+> for having the correct icons based on the filetye in the buffer list.
 
 ## Install
 
-Via [lazy.nvim](https://github.com/folke/lazy.nvim):
+Please use release tags when installing the plugin to ensure
+compatibility and stability.
 
-### Simple configuration
+The `main` branch may contain breaking changes
+and isn't guaranteed to be stable.
+
+### Lazy.nvim
+
+See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```lua
-require('lazy').setup({
-  -- Buffer management
-  { 'mistweaverco/bafa.nvim' },
+{
+  'mistweaverco/bafa.nvim',
+  version = 'v3.4.0',
+  opts = {}
+},
+```
+
+> [!IMPORTANT]
+> `opts` needs to be at least an empty table `{}` and
+> can't be completely omitted.
+
+### Packer.nvim
+
+See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
+
+```lua
+use {
+  'mistweaverco/bafa.nvim',
+  tag = 'v3.4.0',
+  config = function()
+    require('bafa').setup({})
+  end
 })
 ```
-### Advanced configuration
+
+> [!IMPORTANT]
+> `setup` call needs to have at least an empty table `{}` and
+> can't be completely omitted.
+
+### Neovim built-in package manager
 
 ```lua
-require('lazy').setup({
-  -- Buffer management
-  {
-    'mistweaverco/bafa.nvim',
-    opts = {
-      title = "Bafa",
-      title_pos = "center",
-      border = "rounded",
-      style = "minimal",
-      diagnostics = true, -- Show diagnostics in the buffer list
-      line_numbers = false, -- Show line numbers in the buffer list
-      icons = {
-        diagnostics = {
-          Error = "",   -- Icon for error diagnostics
-          Warn = "",    -- Icon for warning diagnostics
-          Info = "",    -- Icon for info diagnostics
-          Hint = "",    -- Icon for hint diagnostics
-        },
-      },
-      -- or "ErrorMsg", "WarningMsg", etc. -- Falls back to WarningMsg if the specified highlight group doesn't exist
-      modified_hl = "DiffChanged",
-      notify = {
-        provider = "notify", -- "notify" or "print"
-      },
-    }
-  },
+vim.pack.add({
+  src = 'https://github.com/mistweaverco/bafa.nvim.git',
+  version = 'v3.4.0',
 })
+require('bafa').setup({})
+```
+
+> [!IMPORTANT]
+> `setup` call needs to have at least an empty table `{}` and
+> can't be completely omitted.
+
+
+### Configuration options
+
+```lua
+return {
+    title = "Bafa",
+    title_pos = "center",
+    border = "rounded",
+    style = "minimal",
+    diagnostics = true, -- Show diagnostics in the buffer list
+    line_numbers = false, -- Show line numbers in the buffer list
+    icons = {
+        diagnostics = {
+            Error = "",   -- Icon for error diagnostics
+            Warn = "",    -- Icon for warning diagnostics
+            Info = "",    -- Icon for info diagnostics
+            Hint = "",    -- Icon for hint diagnostics
+        },
+    },
+    -- or "ErrorMsg", "WarningMsg", etc. -- Falls back to WarningMsg if the specified highlight group doesn't exist
+    modified_hl = "DiffChanged",
+    notify = {
+        provider = "notify", -- "notify" or "print"
+    },
+}
 
 ```
 
