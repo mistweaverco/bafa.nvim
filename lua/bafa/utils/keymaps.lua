@@ -1,23 +1,5 @@
 local M = {}
 
-local noop_keys = {
-  "i",
-  "o",
-  "O",
-  "s",
-  "S",
-  "c",
-  "C",
-  "r",
-  "U",
-}
-
-function M.noop(bufnr)
-  for _, key in ipairs(noop_keys) do
-    vim.api.nvim_buf_set_keymap(bufnr, "n", key, "", { silent = true })
-  end
-end
-
 function M.defaults(bufnr)
   -- Close window
   vim.api.nvim_buf_set_keymap(bufnr, "n", "q", "<Cmd>lua require('bafa.ui').toggle()<CR>", { silent = true })
@@ -44,6 +26,9 @@ function M.defaults(bufnr)
   vim.api.nvim_buf_set_keymap(bufnr, "n", "u", "<Cmd>lua require('bafa.ui').undo()<CR>", { silent = true })
   -- Redo
   vim.api.nvim_buf_set_keymap(bufnr, "n", "<C-r>", "<Cmd>lua require('bafa.ui').redo()<CR>", { silent = true })
+
+  -- Force normal visual mode to be linewise
+  vim.api.nvim_buf_set_keymap(bufnr, "n", "v", "V", { silent = true })
 
   -- Visual mode: delete selected buffers (d and D work in visual mode)
   vim.api.nvim_buf_set_keymap(bufnr, "v", "d", "<Cmd>lua require('bafa.ui').delete_menu_item()<CR>", {})

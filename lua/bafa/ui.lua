@@ -269,10 +269,12 @@ local function refresh_ui()
     end
   end
 
-  --- Safely set buffer lines
-  --- This is necessary to avoid errors when the buffer is modified externally,
-  --- or we are trying to set lines in a non-modifiable buffer.
+  -- Briefly make buffer modifiable to set lines
+  vim.bo[BAFA_BUF_ID].modifiable = true
+  --- This is necessary to avoid errors when the buffer is modified externally
   pcall(vim.api.nvim_buf_set_lines, BAFA_BUF_ID, 0, -1, false, contents)
+  -- Set buffer back to non-modifiable
+  vim.bo[BAFA_BUF_ID].modifiable = false
 
   -- Calculate longest buffer name for width calculation
   local longest_buffer_name = 0
@@ -345,7 +347,8 @@ end
 
 local function create_window()
   local bafa_config = Config.get()
-  local bufnr = vim.api.nvim_create_buf(false, false)
+  local bufnr = vim.api.nvim_create_buf(false, true)
+  vim.bo[bufnr].modifiable = false
 
   local max_width = vim.api.nvim_win_get_width(0)
   local max_height = vim.api.nvim_win_get_height(0)

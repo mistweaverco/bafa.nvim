@@ -13,7 +13,7 @@
 
 A minimal BufExplorer alternative for lazy people for your favorite editor.
 
-Bafa is swahili for "buffer".
+Bafa is swahili for "buffer."
 
 It allows you to quickly switch between buffers and delete them.
 
@@ -30,10 +30,11 @@ It allows you to quickly switch between buffers and delete them.
 - [Neovim](https://github.com/neovim/neovim) (tested with 0.9.0)
 
 > [!TIP]
-> For having fancy icons, you need to install a patched font.
-> You can find some patched fonts in the [Nerd Fonts](https://www.nerdfonts.com/) website.
-> Also you should consider installing [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons)
-> for having the correct icons based on the ft in the buffer list.
+> You need to install a patched nerd-font for
+> having the icons displayed correctly.
+> You can find some patched fonts on the [Nerd Fonts](https://www.nerdfonts.com/) website.
+> You should also consider installing [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons)
+> for having the correct icons based on the filetye in the buffer list.
 
 ## Install
 
@@ -49,8 +50,8 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```lua
 {
-  'mistweaverco/kikao.nvim',
-  version = 'v3.3.1',
+  'mistweaverco/bafa.nvim',
+  version = 'v3.4.0',
   opts = {}
 },
 ```
@@ -65,10 +66,10 @@ See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
 
 ```lua
 use {
-  'mistweaverco/kikao.nvim',
-  tag = 'v3.3.1',
+  'mistweaverco/bafa.nvim',
+  tag = 'v3.4.0',
   config = function()
-    require('kikao').setup({})
+    require('bafa').setup({})
   end
 })
 ```
@@ -81,10 +82,10 @@ use {
 
 ```lua
 vim.pack.add({
-  src = 'https://github.com/mistweaverco/kikao.nvim.git',
-  version = 'v3.3.1',
+  src = 'https://github.com/mistweaverco/bafa.nvim.git',
+  version = 'v3.4.0',
 })
-require('kikao').setup({})
+require('bafa').setup({})
 ```
 
 > [!IMPORTANT]
