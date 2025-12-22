@@ -184,6 +184,7 @@ local add_diagnostics_icons = function(idx, buffer)
         { " ", diagnostic.hl_group },
         { diagnostic.icon, diagnostic.hl_group },
       },
+      virt_text_pos = "eol", -- Position at end of line (after padding)
     })
     count_diagnostics = count_diagnostics + 1
   end
@@ -226,10 +227,51 @@ local function refresh_ui()
 
   local working_buffers = State.get_working_buffers()
   local contents = {}
+  local bafa_config = Config.get()
+
+  -- First pass: build lines and calculate maximum display width
+  local max_display_width = 0
+  local line_display_widths = {}
 
   for idx, buffer in ipairs(working_buffers) do
     local icon, _ = get_buffer_icon(buffer)
-    contents[idx] = string.format("  %s %s", icon, buffer.name)
+    local base_line = string.format("  %s %s", icon, buffer.name)
+    local base_width = vim.fn.strdisplaywidth(base_line)
+
+    -- Calculate diagnostics width for this line
+    local diagnostics_width = 0
+    if bafa_config.diagnostics then
+      local diags = get_diagnostics(buffer.number)
+      if #diags > 0 then
+        local full_diag_string = ""
+        for _, diagnostic in ipairs(diags) do
+          full_diag_string = full_diag_string .. " " .. diagnostic.count .. " " .. diagnostic.icon
+        end
+        diagnostics_width = vim.fn.strdisplaywidth(full_diag_string)
+      end
+    end
+
+    -- Total display width for this line (base + diagnostics)
+    local total_width = base_width + diagnostics_width
+    line_display_widths[idx] = total_width
+    if total_width > max_display_width then
+      max_display_width = total_width
+    end
+  end
+
+  -- Second pass: pad lines to match maximum width
+  for idx, buffer in ipairs(working_buffers) do
+    local icon, _ = get_buffer_icon(buffer)
+    local base_line = string.format("  %s %s", icon, buffer.name)
+    local current_width = line_display_widths[idx]
+    local padding_needed = max_display_width - current_width
+
+    -- Pad with spaces to match maximum width
+    if padding_needed > 0 then
+      contents[idx] = base_line .. string.rep(" ", padding_needed)
+    else
+      contents[idx] = base_line
+    end
   end
 
   --- Safely set buffer lines
@@ -756,12 +798,12 @@ function M.toggle()
   if BAFA_WIN_ID ~= nil and vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
     close_window()
     -- Restore cursor when closing the window
-    UiUtils.show_cursor()
+    UiUtils.revert_patches()
     return
   end
 
   -- Before creating the window, hide the cursor
-  UiUtils.hide_cursor()
+  UiUtils.apply_patches()
 
   local win_info = create_window()
   -- Enable cursorline for, otherwise, without a cursor, the user can't see the selection
