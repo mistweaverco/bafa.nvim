@@ -136,6 +136,7 @@ local add_ft_icon_highlight = function(idx, buffer)
   vim.api.nvim_buf_set_extmark(BAFA_BUF_ID, BAFA_NS_ID, idx - 1, 2, {
     end_col = 3,
     hl_group = hl_group,
+    hl_mode = "combine", -- Combine with visual selection instead of replacing it
   })
 end
 
@@ -164,6 +165,7 @@ local add_modified_highlight = function(idx, buffer)
   -- Use extmark to highlight from column 4 to end of line
   vim.api.nvim_buf_set_extmark(BAFA_BUF_ID, BAFA_NS_ID, idx - 1, 4, {
     hl_group = hl_name,
+    hl_mode = "combine", -- Combine with visual selection instead of replacing it
   })
 end
 
@@ -185,6 +187,7 @@ local add_diagnostics_icons = function(idx, buffer)
         { diagnostic.icon, diagnostic.hl_group },
       },
       virt_text_pos = "eol", -- Position at end of line (after padding)
+      hl_mode = "combine", -- Combine with visual selection instead of replacing it
     })
     count_diagnostics = count_diagnostics + 1
   end
@@ -238,17 +241,9 @@ local function refresh_ui()
     local base_line = string.format("  %s %s", icon, buffer.name)
     local base_width = vim.fn.strdisplaywidth(base_line)
 
-    -- Calculate diagnostics width for this line
     local diagnostics_width = 0
     if bafa_config.diagnostics then
-      local diags = get_diagnostics(buffer.number)
-      if #diags > 0 then
-        local full_diag_string = ""
-        for _, diagnostic in ipairs(diags) do
-          full_diag_string = full_diag_string .. " " .. diagnostic.count .. " " .. diagnostic.icon
-        end
-        diagnostics_width = vim.fn.strdisplaywidth(full_diag_string)
-      end
+      diagnostics_width = get_diagnostics_width({ buffer })
     end
 
     -- Total display width for this line (base + diagnostics)
@@ -283,8 +278,9 @@ local function refresh_ui()
   local longest_buffer_name = 0
   for _, buffer in ipairs(working_buffers) do
     local buffer_name_length = string.len(buffer.name)
-    if buffer_name_length > longest_buffer_name then
-      longest_buffer_name = buffer_name_length
+    local total_length = buffer_name_length + get_diagnostics_width({ buffer })
+    if total_length > longest_buffer_name then
+      longest_buffer_name = total_length
     end
   end
 
@@ -302,18 +298,8 @@ local function refresh_ui()
 
   -- Update window width and height if needed, and re-center
   local number_column_width = get_number_column_width(#working_buffers)
-  local diagnostics_width = get_diagnostics_width(working_buffers)
   local base_width = longest_buffer_name + 6 -- space for icon and padding
   base_width = base_width + number_column_width -- add number column width if enabled
-  if diagnostics_width > 0 then
-    -- this is 4, because we have 2 spaces at the beginning of each row,
-    -- then the icon and the buffer name
-    -- when we have diagnostics enabled,
-    -- we have 1 space before diagnostics and 1 space after diagnostics
-    -- plus the 2 spaces at the end to match the beginning of the line
-    -- so total of 4 spaces
-    base_width = base_width + 4 -- some padding
-  end
 
   -- Get parent window dimensions based on relative setting
   local max_width = vim.o.columns

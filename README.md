@@ -37,46 +37,85 @@ It allows you to quickly switch between buffers and delete them.
 
 ## Install
 
-Via [lazy.nvim](https://github.com/folke/lazy.nvim):
+Please use release tags when installing the plugin to ensure
+compatibility and stability.
 
-### Simple configuration
+The `main` branch may contain breaking changes
+and isn't guaranteed to be stable.
+
+### Lazy.nvim
+
+See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```lua
-require('lazy').setup({
-  -- Buffer management
-  { 'mistweaverco/bafa.nvim' },
+{
+  'mistweaverco/kikao.nvim',
+  version = 'v3.3.1',
+  opts = {}
+},
+```
+
+> [!IMPORTANT]
+> `opts` needs to be at least an empty table `{}` and
+> can't be completely omitted.
+
+### Packer.nvim
+
+See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
+
+```lua
+use {
+  'mistweaverco/kikao.nvim',
+  tag = 'v3.3.1',
+  config = function()
+    require('kikao').setup({})
+  end
 })
 ```
-### Advanced configuration
+
+> [!IMPORTANT]
+> `setup` call needs to have at least an empty table `{}` and
+> can't be completely omitted.
+
+### Neovim built-in package manager
 
 ```lua
-require('lazy').setup({
-  -- Buffer management
-  {
-    'mistweaverco/bafa.nvim',
-    opts = {
-      title = "Bafa",
-      title_pos = "center",
-      border = "rounded",
-      style = "minimal",
-      diagnostics = true, -- Show diagnostics in the buffer list
-      line_numbers = false, -- Show line numbers in the buffer list
-      icons = {
-        diagnostics = {
-          Error = "",   -- Icon for error diagnostics
-          Warn = "",    -- Icon for warning diagnostics
-          Info = "",    -- Icon for info diagnostics
-          Hint = "",    -- Icon for hint diagnostics
-        },
-      },
-      -- or "ErrorMsg", "WarningMsg", etc. -- Falls back to WarningMsg if the specified highlight group doesn't exist
-      modified_hl = "DiffChanged",
-      notify = {
-        provider = "notify", -- "notify" or "print"
-      },
-    }
-  },
+vim.pack.add({
+  src = 'https://github.com/mistweaverco/kikao.nvim.git',
+  version = 'v3.3.1',
 })
+require('kikao').setup({})
+```
+
+> [!IMPORTANT]
+> `setup` call needs to have at least an empty table `{}` and
+> can't be completely omitted.
+
+
+### Configuration options
+
+```lua
+return {
+    title = "Bafa",
+    title_pos = "center",
+    border = "rounded",
+    style = "minimal",
+    diagnostics = true, -- Show diagnostics in the buffer list
+    line_numbers = false, -- Show line numbers in the buffer list
+    icons = {
+        diagnostics = {
+            Error = "",   -- Icon for error diagnostics
+            Warn = "",    -- Icon for warning diagnostics
+            Info = "",    -- Icon for info diagnostics
+            Hint = "",    -- Icon for hint diagnostics
+        },
+    },
+    -- or "ErrorMsg", "WarningMsg", etc. -- Falls back to WarningMsg if the specified highlight group doesn't exist
+    modified_hl = "DiffChanged",
+    notify = {
+        provider = "notify", -- "notify" or "print"
+    },
+}
 
 ```
 
