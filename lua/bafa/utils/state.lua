@@ -354,8 +354,8 @@ function M.save_order()
   ---@type BafaBuffer[]
   local ordererd_buffers = {}
   for _, buf in ipairs(state.working_buffers) do
-    -- Only save valid buffers with paths (skip unnamed buffers)
-    if vim.api.nvim_buf_is_valid(buf.number) and buf.path ~= "" then
+    -- Only save valid buffers with paths (skip unnamed buffers and invalid buffers)
+    if buf and buf.number and vim.api.nvim_buf_is_valid(buf.number) and buf.path and buf.path ~= "" then
       table.insert(ordererd_buffers, buf.path)
     end
   end
