@@ -32,8 +32,12 @@ It allows you to quickly switch between buffers and delete them.
 > [!TIP]
 > You need to install a patched nerd-font for
 > having the icons displayed correctly.
-> You can find some patched fonts on the [Nerd Fonts](https://www.nerdfonts.com/) website.
-> You should also consider installing [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons)
+>
+> You can find some patched fonts on the
+> [Nerd Fonts](https://www.nerdfonts.com/) website.
+>
+> You should also consider installing
+> [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons)
 > for having the correct icons based on the filetye in the buffer list.
 
 ## Install
@@ -51,7 +55,7 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 ```lua
 {
   'mistweaverco/bafa.nvim',
-  version = 'v1.3.1',
+  version = 'v1.3.2',
   opts = {}
 },
 ```
@@ -67,7 +71,7 @@ See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
 ```lua
 use {
   'mistweaverco/bafa.nvim',
-  tag = 'v1.3.1',
+  tag = 'v1.3.2',
   config = function()
     require('bafa').setup({})
   end
@@ -83,7 +87,7 @@ use {
 ```lua
 vim.pack.add({
   src = 'https://github.com/mistweaverco/bafa.nvim.git',
-  version = 'v1.3.1',
+  version = 'v1.3.2',
 })
 require('bafa').setup({})
 ```
