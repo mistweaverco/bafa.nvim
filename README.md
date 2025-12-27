@@ -177,7 +177,7 @@ and then press `dd` or `D` to mark them all for deletion.
 > Because of the "commit" system,
 > buffers marked for deletion aren't actually deleted
 > until you select buffer.
-> If this the selected buffer is marked for deletion as well,
+> If the selected buffer is marked for deletion as well,
 > we won't delete it, but instead restore it.
 >
 > This also means, that you can't really wipe all buffers
