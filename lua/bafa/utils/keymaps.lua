@@ -36,6 +36,24 @@ function M.defaults(bufnr)
   -- Visual mode: move selected buffers up/down (K and J work in visual mode)
   vim.api.nvim_buf_set_keymap(bufnr, "v", "K", "<Cmd>lua require('bafa.ui').move_buffer_up()<CR>", { silent = true })
   vim.api.nvim_buf_set_keymap(bufnr, "v", "J", "<Cmd>lua require('bafa.ui').move_buffer_down()<CR>", { silent = true })
+
+  -- Commit changes without closing (localleader + w)
+  local localleader = vim.g.maplocalleader or ","
+  vim.api.nvim_buf_set_keymap(
+    bufnr,
+    "n",
+    localleader .. "w",
+    "<Cmd>lua require('bafa.ui').commit_changes_and_refresh()<CR>",
+    { silent = true, desc = "Commit changes and refresh UI" }
+  )
+  -- Commit changes and close (localleader + W)
+  vim.api.nvim_buf_set_keymap(
+    bufnr,
+    "n",
+    localleader .. "W",
+    "<Cmd>lua require('bafa.ui').commit_changes_and_close()<CR>",
+    { silent = true, desc = "Commit changes and close UI" }
+  )
 end
 
 return M

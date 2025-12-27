@@ -26,9 +26,15 @@ M.config_defaults = {
   border = "rounded",
   style = "minimal",
   diagnostics = true,
-  modified_hl = "WarningMsg",
   line_numbers = false,
   log_level = Types.BafaLoggerLogLevelNames.error,
+  hl = {
+    modified = "DiffChange", -- Highlight group for modified buffer text (fallback: GitSignsChange, WarningMsg)
+    sign = {
+      modified = "GitSignsChange", -- Highlight group for modified buffer signs (fallback: DiffChange)
+      deleted = "GitSignsDelete", -- Highlight group for deleted buffer signs (fallback: DiffDelete)
+    },
+  },
   notify = {
     provider = Types.BafaConfigNotifyProvider.notify,
   },
@@ -38,6 +44,9 @@ M.config_defaults = {
       Warn = "", -- Icon for warning diagnostics
       Info = "", -- Icon for info diagnostics
       Hint = "", -- Icon for hint diagnostics
+    },
+    sign = {
+      changes = "┃", -- Sign character for modified/deleted buffers (gitsigns-like UX)
     },
   },
 }

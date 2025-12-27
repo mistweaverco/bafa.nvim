@@ -19,6 +19,156 @@ local BAFA_DIAGNOSTIC_AUTOCMD_ID = nil
 
 local DIAGNOSTICS_LABELS = { "Error", "Warn", "Info", "Hint" }
 
+-- Sign names for bafa
+local BAFA_SIGN_MODIFIED = "BafaModified"
+local BAFA_SIGN_DELETED = "BafaDeleted"
+
+---Get highlight group with fallback chain
+---@param config_hl string|nil The configured highlight group
+---@param fallbacks string[] Array of fallback highlight groups to try
+---@param create_fallback string|nil Optional name for a fallback highlight to create if none exist
+---@param create_fallback_color string|nil Optional color for the fallback highlight
+---@return string The highlight group to use
+local function get_hl_with_fallback(config_hl, fallbacks, create_fallback, create_fallback_color)
+  -- If config specifies a highlight group, check if it exists
+  if config_hl and vim.fn.hlexists(config_hl) == 1 then
+    return config_hl
+  end
+
+  -- Try fallbacks in order
+  for _, fallback_hl in ipairs(fallbacks) do
+    if vim.fn.hlexists(fallback_hl) == 1 then
+      return fallback_hl
+    end
+  end
+
+  -- Last resort: create a fallback highlight if specified
+  if create_fallback and create_fallback_color then
+    vim.api.nvim_set_hl(0, create_fallback, { fg = create_fallback_color })
+    return create_fallback
+  end
+
+  -- Return the first fallback as default (even if it doesn't exist)
+  return fallbacks[1] or config_hl or "Normal"
+end
+
+---Initialize signs for bafa
+---Defines signs for modified and deleted states using configurable highlight groups
+local function init_signs()
+  -- Get sign text from config, default to "┃"
+  local bafa_config = Config.get()
+  local icons_config = bafa_config.icons or {}
+  local sign_config = icons_config.sign or {}
+  local sign_text = sign_config.changes or "┃"
+
+  -- Get highlight groups from config with fallbacks
+  local hl_config = bafa_config.hl or {}
+  local sign_hl_config = hl_config.sign or {}
+
+  -- Get modified sign highlight
+  local modified_sign_hl =
+    get_hl_with_fallback(sign_hl_config.modified, { "GitSignsChange", "DiffChange" }, "BafaModifiedSign", "#fabd2f")
+
+  -- Get deleted sign highlight
+  local deleted_sign_hl =
+    get_hl_with_fallback(sign_hl_config.deleted, { "GitSignsDelete", "DiffDelete" }, "BafaDeletedSign", "#fb4934")
+
+  -- Define sign for modified buffers
+  vim.fn.sign_define(BAFA_SIGN_MODIFIED, {
+    text = sign_text,
+    texthl = modified_sign_hl,
+    numhl = "",
+    linehl = "",
+  })
+
+  -- Define sign for deleted buffers
+  vim.fn.sign_define(BAFA_SIGN_DELETED, {
+    text = sign_text,
+    texthl = deleted_sign_hl,
+    numhl = "",
+    linehl = "",
+  })
+end
+
+---Check if a buffer is marked for deletion
+---A buffer is marked for deletion if it's in original_buffers but not in working_buffers
+---@param buffer table The buffer to check
+---@return boolean True if buffer is marked for deletion
+local function is_buffer_marked_for_deletion(buffer)
+  if not buffer or not buffer.number then
+    return false
+  end
+
+  local original_buffers = State.get_original_buffers()
+  local working_buffers = State.get_working_buffers()
+
+  -- Create a set of working buffer numbers for quick lookup
+  local working_numbers = {}
+  for _, buf in ipairs(working_buffers) do
+    if buf and buf.number then
+      working_numbers[buf.number] = true
+    end
+  end
+
+  -- Check if this buffer is in original but not in working
+  for _, orig_buf in ipairs(original_buffers) do
+    if orig_buf and orig_buf.number == buffer.number then
+      -- Found in original, check if it's missing from working
+      return not working_numbers[buffer.number]
+    end
+  end
+
+  return false
+end
+
+---Check if a buffer is modified (has unsaved changes)
+---@param buffer table The buffer to check
+---@return boolean True if buffer is modified
+local function is_buffer_modified(buffer)
+  if not buffer or not buffer.number or not vim.api.nvim_buf_is_valid(buffer.number) then
+    return false
+  end
+
+  local success, is_modified = pcall(function()
+    return vim.bo[buffer.number].modified
+  end)
+
+  return success and is_modified or false
+end
+
+---Place signs for a buffer line
+---Shows sign(s) colored based on buffer state (modified and/or marked for deletion)
+---Can show both signs if buffer is both modified and marked for deletion
+---@param idx number Line index (1-indexed)
+---@param buffer table The buffer to check
+local function update_buffer_sign(idx, buffer)
+  if BAFA_BUF_ID == nil or not vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then
+    return
+  end
+
+  if not buffer or not buffer.number then
+    return
+  end
+
+  local is_deleted = is_buffer_marked_for_deletion(buffer)
+  local is_mod = is_buffer_modified(buffer)
+
+  -- Use unique IDs for each sign type to allow both to be placed on the same line
+  -- ID format: line_number * 10 + sign_type_offset (1 for deleted, 2 for modified)
+  local deleted_sign_id = idx * 10 + 1
+  local modified_sign_id = idx * 10 + 2
+
+  -- Place deleted sign if marked for deletion
+  if is_deleted then
+    vim.fn.sign_place(deleted_sign_id, "bafa", BAFA_SIGN_DELETED, BAFA_BUF_ID, { lnum = idx, priority = 10 })
+  end
+
+  -- Place modified sign if modified (can be shown alongside deleted sign)
+  if is_mod then
+    vim.fn.sign_place(modified_sign_id, "bafa", BAFA_SIGN_MODIFIED, BAFA_BUF_ID, { lnum = idx, priority = 11 })
+  end
+end
+
 ---@class BafaDiagnosticInfo
 ---@field count number
 ---@field icon string
@@ -89,6 +239,23 @@ local function get_number_column_width(line_count)
   return digits + 2
 end
 
+--- Calculate the width needed for signs column
+---Accounts for the maximum number of signs needed (0, 1, or 2)
+---Neovim reserves: 0 columns for no signs, 2 columns for 1 sign, 4 columns for 2 signs
+---@param max_signs number Maximum number of signs needed (0, 1, or 2)
+---@return number The width needed for the signs column
+local function get_sign_column_width(max_signs)
+  if max_signs == 0 then
+    return 0
+  elseif max_signs == 1 then
+    -- Neovim reserves 2 columns for 1 sign (1 for sign + 1 for spacing)
+    return 2
+  else
+    -- Neovim reserves 4 columns for 2 signs (2 for signs + 2 for spacing)
+    return 4
+  end
+end
+
 --- Calculate the width needed for diagnostics icons
 ---@param buffers table[] Array of buffer objects
 ---@return number max_diagnostics_width The width needed for diagnostics (0 if diagnostics are disabled)
@@ -152,58 +319,6 @@ local add_ft_icon_highlight = function(idx, buffer)
   })
 end
 
---- Colors the buffer name if it is modified
----@param idx number
----@param buffer table
-local add_modified_highlight = function(idx, buffer)
-  if BAFA_BUF_ID == nil then
-    return
-  end
-  if not buffer or not buffer.number or not vim.api.nvim_buf_is_valid(buffer.number) then
-    return
-  end
-  -- Check the actual buffer's modified state, not the cached one
-  local success, is_modified = pcall(function()
-    return vim.bo[buffer.number].modified
-  end)
-  if not success or not is_modified then
-    return
-  end
-  local bafa_config = Config.get()
-  local hl_name = bafa_config.modified_hl or "WarningMsg"
-
-  -- Ensure the highlight group exists, fallback to WarningMsg if it doesn't
-  local hl = vim.api.nvim_get_hl(0, { name = hl_name, create = false })
-  if not hl or vim.tbl_isempty(hl) then
-    -- If the specified highlight group doesn't exist, fallback to WarningMsg
-    if hl_name ~= "WarningMsg" then
-      hl_name = "WarningMsg"
-      -- Verify WarningMsg exists, if not, use a simple fallback
-      hl = vim.api.nvim_get_hl(0, { name = hl_name, create = false })
-    end
-    if not hl or vim.tbl_isempty(hl) then
-      -- Last resort: create a simple highlight
-      vim.api.nvim_set_hl(0, "BafaModified", { fg = "#ffa500" }) -- Orange color
-      hl_name = "BafaModified"
-    end
-  end
-
-  -- Use extmark to highlight from column 4 to end of line
-  -- Get the line to calculate the proper end column
-  local line_content = vim.api.nvim_buf_get_lines(BAFA_BUF_ID, idx - 1, idx, false)
-  if line_content and #line_content > 0 then
-    local line_length = #line_content[1]
-    -- Only highlight if line is long enough (start_col is 4, 0-indexed)
-    if line_length > 4 then
-      vim.api.nvim_buf_set_extmark(BAFA_BUF_ID, BAFA_NS_ID, idx - 1, 4, {
-        end_col = line_length,
-        hl_group = hl_name,
-        hl_mode = "combine", -- Combine with visual selection instead of replacing it
-      })
-    end
-  end
-end
-
 ---Add diagnostics icons to the buffer line
 ---@param idx number
 ---@param buffer table
@@ -243,6 +358,11 @@ local function close_window()
     State.save_cursor_line(cursor_pos[1])
   end
 
+  -- Clear signs before closing
+  if BAFA_BUF_ID ~= nil and vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then
+    vim.fn.sign_unplace("bafa", { buffer = BAFA_BUF_ID })
+  end
+
   vim.api.nvim_win_close(BAFA_WIN_ID, true)
   BAFA_WIN_ID = nil
   BAFA_BUF_ID = nil
@@ -266,6 +386,11 @@ local function refresh_ui()
   -- Clear existing highlights and extmarks
   vim.api.nvim_buf_clear_namespace(BAFA_BUF_ID, BAFA_NS_ID, 0, -1)
 
+  -- Clear existing signs
+  if BAFA_BUF_ID ~= nil and vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then
+    vim.fn.sign_unplace("bafa", { buffer = BAFA_BUF_ID })
+  end
+
   local working_buffers = State.get_working_buffers()
 
   -- Remove invalid buffers from state (buffers that were removed externally)
@@ -277,17 +402,48 @@ local function refresh_ui()
     end
   end
 
-  -- Get updated working buffers after removing invalid ones
-  working_buffers = State.get_working_buffers()
+  -- Use display_order from state (includes both working and deleted buffers in moved order)
+  local display_buffers = State.get_display_order()
+
+  -- Filter out invalid buffers from display_order
+  local valid_display_buffers = {}
+  for _, buf in ipairs(display_buffers) do
+    if buf and buf.number and vim.api.nvim_buf_is_valid(buf.number) then
+      table.insert(valid_display_buffers, buf)
+    end
+  end
+  display_buffers = valid_display_buffers
 
   local contents = {}
   local bafa_config = Config.get()
 
-  -- First pass: build lines and calculate maximum display width
+  -- First pass: determine maximum number of signs needed and build lines
+  local max_signs_needed = 0
   local max_display_width = 0
   local line_display_widths = {}
 
-  for idx, buffer in ipairs(working_buffers) do
+  for idx, buffer in ipairs(display_buffers) do
+    -- Count signs needed for this buffer
+    if buffer and buffer.number and vim.api.nvim_buf_is_valid(buffer.number) then
+      -- Check actual buffer modified state (not cached)
+      local success, is_modified = pcall(function()
+        return vim.bo[buffer.number].modified
+      end)
+      if success then
+        buffer.is_modified = is_modified
+      end
+
+      local sign_count = 0
+      if is_buffer_marked_for_deletion(buffer) then
+        sign_count = sign_count + 1
+      end
+      if is_buffer_modified(buffer) then
+        sign_count = sign_count + 1
+      end
+      if sign_count > max_signs_needed then
+        max_signs_needed = sign_count
+      end
+    end
     -- Skip invalid buffers (shouldn't happen after filtering, but safety check)
     if buffer and buffer.number and vim.api.nvim_buf_is_valid(buffer.number) then
       local icon, _ = get_buffer_icon(buffer)
@@ -309,7 +465,7 @@ local function refresh_ui()
   end
 
   -- Second pass: pad lines to match maximum width
-  for idx, buffer in ipairs(working_buffers) do
+  for idx, buffer in ipairs(display_buffers) do
     -- Skip invalid buffers (shouldn't happen after filtering, but safety check)
     if buffer and buffer.number and vim.api.nvim_buf_is_valid(buffer.number) then
       local icon, _ = get_buffer_icon(buffer)
@@ -335,7 +491,7 @@ local function refresh_ui()
 
   -- Calculate longest buffer name for width calculation
   local longest_buffer_name = 0
-  for _, buffer in ipairs(working_buffers) do
+  for _, buffer in ipairs(display_buffers) do
     -- Skip invalid buffers (shouldn't happen after filtering, but safety check)
     if buffer and buffer.number and vim.api.nvim_buf_is_valid(buffer.number) then
       local buffer_name_length = string.len(buffer.name)
@@ -346,7 +502,19 @@ local function refresh_ui()
     end
   end
 
-  for idx, buffer in ipairs(working_buffers) do
+  -- Set signcolumn based on maximum signs needed (calculated in first pass above)
+  -- This must be done before calculating window width so the sign column space is properly reserved
+  if BAFA_WIN_ID ~= nil and vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
+    if max_signs_needed == 0 then
+      vim.wo[BAFA_WIN_ID].signcolumn = "no"
+    elseif max_signs_needed == 1 then
+      vim.wo[BAFA_WIN_ID].signcolumn = "yes:1"
+    else
+      vim.wo[BAFA_WIN_ID].signcolumn = "yes:2"
+    end
+  end
+
+  for idx, buffer in ipairs(display_buffers) do
     -- Skip invalid buffers (shouldn't happen after filtering, but safety check)
     if buffer and buffer.number and vim.api.nvim_buf_is_valid(buffer.number) then
       -- Update the cached is_modified state from the actual buffer
@@ -358,8 +526,8 @@ local function refresh_ui()
       end
       -- add highlights
       add_ft_icon_highlight(idx, buffer)
-      -- add modified highlights
-      add_modified_highlight(idx, buffer)
+      -- add signs (gitsigns-like UX)
+      update_buffer_sign(idx, buffer)
       -- add diagnostics
       if Config.get().diagnostics then
         add_diagnostics_icons(idx, buffer)
@@ -369,9 +537,13 @@ local function refresh_ui()
   end
 
   -- Update window width and height if needed, and re-center
-  local number_column_width = get_number_column_width(#working_buffers)
+  local number_column_width = get_number_column_width(#display_buffers)
+  -- Calculate sign column width based on actual number of signs needed (0, 1, or 2)
+  -- This ensures the window width accounts for the reserved sign column space
+  local sign_column_width = get_sign_column_width(max_signs_needed)
   local base_width = longest_buffer_name + 6 -- space for icon and padding
   base_width = base_width + number_column_width -- add number column width if enabled
+  base_width = base_width + sign_column_width -- add sign column width (0, 1, or 2 signs worth of space)
 
   -- Get parent window dimensions based on relative setting
   local max_width = vim.o.columns
@@ -379,28 +551,33 @@ local function refresh_ui()
 
   -- Calculate needed dimensions, ensuring they don't exceed parent window
   local needed_width = math.min(max_width, base_width)
-  local needed_height = math.min(max_height, #working_buffers)
+  local needed_height = math.min(max_height, #display_buffers)
 
   -- Ensure dimensions don't exceed parent window (safety check)
   needed_width = math.min(needed_width, max_width)
   needed_height = math.min(needed_height, max_height)
 
-  -- Update window dimensions if not manually set in config
+  -- Update window dimensions
+  -- Get current dimensions after signcolumn has been set (it may have changed the layout)
+  local current_width = vim.api.nvim_win_get_width(BAFA_WIN_ID)
+  local current_height = vim.api.nvim_win_get_height(BAFA_WIN_ID)
+
   local width_changed = false
   local height_changed = false
-  local current_width = vim.api.nvim_win_get_width(BAFA_WIN_ID)
-  if needed_width ~= current_width then
+
+  -- Always update width if it differs (accounting for sign column changes)
+  if math.abs(needed_width - current_width) > 0 then
     vim.api.nvim_win_set_width(BAFA_WIN_ID, needed_width)
     width_changed = true
   end
 
-  local current_height = vim.api.nvim_win_get_height(BAFA_WIN_ID)
   if needed_height ~= current_height then
     vim.api.nvim_win_set_height(BAFA_WIN_ID, needed_height)
     height_changed = true
   end
 
   -- Re-center the window after size changes (only if relative is "editor")
+  -- Always re-center if dimensions changed to ensure proper positioning
   if width_changed or height_changed then
     local final_width = needed_width
     local final_height = needed_height
@@ -426,10 +603,13 @@ local function create_window()
   local buffer_lines = BufferUtils.get_lines_buffer_names()
   -- Get buffers for diagnostics width calculation
   local buffers = BufferUtils.get_buffers_as_table()
-  -- Calculate width: buffer name + number column (if enabled) + diagnostics (if enabled) + icon spacing
+  -- Calculate width: buffer name + number column (if enabled) + sign column + diagnostics (if enabled) + icon spacing
+  -- For initial window creation, we assume max 2 signs might be needed
   local number_column_width = get_number_column_width(buffer_lines)
+  local sign_column_width = get_sign_column_width(2) -- Assume max 2 signs for initial sizing
   local diagnostics_width = get_diagnostics_width(buffers)
-  local width = math.min(max_width, buffer_longest_name_width + 4 + number_column_width + diagnostics_width)
+  local width =
+    math.min(max_width, buffer_longest_name_width + 4 + number_column_width + sign_column_width + diagnostics_width)
   local height = math.min(max_height, buffer_lines + 2)
 
   BAFA_WIN_ID = vim.api.nvim_open_win(bufnr, true, {
@@ -455,6 +635,24 @@ end
 
 local M = {}
 
+---Get buffer at display index (accounting for both working and deleted buffers)
+---@param display_idx number Display line index (1-indexed)
+---@return table|nil The buffer at the display index, or nil if out of bounds
+local function get_buffer_at_display_index(display_idx)
+  -- Use display_order from state (includes both working and deleted buffers in moved order)
+  local display_buffers = State.get_display_order()
+
+  -- Filter out invalid buffers
+  local valid_display_buffers = {}
+  for _, buf in ipairs(display_buffers) do
+    if buf and buf.number and vim.api.nvim_buf_is_valid(buf.number) then
+      table.insert(valid_display_buffers, buf)
+    end
+  end
+
+  return valid_display_buffers[display_idx]
+end
+
 function M.select_menu_item()
   -- check if working buffers are empty
   -- if so, commit and close
@@ -469,9 +667,24 @@ function M.select_menu_item()
   end
 
   local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
-  local selected_buffer = State.get_buffer_at_index(selected_line_number)
+  local selected_buffer = get_buffer_at_display_index(selected_line_number)
   if selected_buffer == nil or not selected_buffer.number then
     return
+  end
+
+  -- If the selected buffer is marked for deletion, restore it first
+  if is_buffer_marked_for_deletion(selected_buffer) then
+    State.add_buffer(selected_buffer)
+    refresh_ui()
+    -- After restoring, the buffer is now in working_buffers, so we can proceed
+    -- But we need to get the updated position since the list changed
+    local working_buffers = State.get_working_buffers()
+    for idx, buf in ipairs(working_buffers) do
+      if buf and buf.number == selected_buffer.number then
+        selected_line_number = idx
+        break
+      end
+    end
   end
 
   -- Commit changes before selecting
@@ -546,26 +759,89 @@ function M.delete_menu_item()
 
   local working_buffers = State.get_working_buffers()
 
+  -- Create a map of working buffer numbers to their indices for quick lookup
+  local working_buffer_map = {}
+  for i, buf in ipairs(working_buffers) do
+    if buf and buf.number then
+      working_buffer_map[buf.number] = i
+    end
+  end
+
+  -- Use display_order from state (includes both working and deleted buffers)
+  local display_buffers = State.get_display_order()
+
+  -- Filter out invalid buffers to ensure correct indexing
+  local valid_display_buffers = {}
+  for _, buf in ipairs(display_buffers) do
+    if buf and buf.number and vim.api.nvim_buf_is_valid(buf.number) then
+      table.insert(valid_display_buffers, buf)
+    end
+  end
+
+  -- Convert display indices to working buffer indices
+  -- Toggle behavior: if buffer is already marked for deletion, restore it; otherwise delete it
+  local working_indices_to_delete = {}
+  local restored_count = 0
+  for _, display_idx in ipairs(selected_indices) do
+    -- Ensure index is within bounds of valid display buffers
+    if display_idx >= 1 and display_idx <= #valid_display_buffers then
+      -- Use valid_display_buffers for indexing
+      local buffer = valid_display_buffers[display_idx]
+      if buffer and buffer.number then
+        -- Check if buffer is already marked for deletion
+        if is_buffer_marked_for_deletion(buffer) then
+          -- Buffer is already marked for deletion, restore it (toggle off)
+          State.add_buffer(buffer)
+          restored_count = restored_count + 1
+        elseif working_buffer_map[buffer.number] then
+          -- Buffer is in working list, add its working index for deletion (toggle on)
+          table.insert(working_indices_to_delete, working_buffer_map[buffer.number])
+        end
+      end
+    end
+  end
+
   -- Delete buffers in reverse order to maintain correct indices
-  table.sort(selected_indices, function(a, b)
+  table.sort(working_indices_to_delete, function(a, b)
     return a > b
   end)
 
   local deleted_count = 0
-  for _, idx in ipairs(selected_indices) do
-    if State.delete_buffer_at_index(idx) then
+  for _, working_idx in ipairs(working_indices_to_delete) do
+    if State.delete_buffer_at_index(working_idx) then
       deleted_count = deleted_count + 1
     end
   end
 
-  if deleted_count > 0 then
+  if deleted_count > 0 or restored_count > 0 then
     refresh_ui()
 
-    -- Move cursor if we deleted the last item(s)
+    -- Update cursor position if needed
+    -- Get display buffers to find the correct line number
     local new_working_buffers = State.get_working_buffers()
-    if #new_working_buffers > 0 and BAFA_WIN_ID ~= nil then
+    local new_original_buffers = State.get_original_buffers()
+
+    -- Build display buffers to get correct line count
+    local new_working_buffer_map = {}
+    for _, buf in ipairs(new_working_buffers) do
+      if buf and buf.number then
+        new_working_buffer_map[buf.number] = true
+      end
+    end
+
+    local new_display_count = 0
+    for _, orig_buf in ipairs(new_original_buffers) do
+      if orig_buf and orig_buf.number then
+        if new_working_buffer_map[orig_buf.number] or vim.api.nvim_buf_is_valid(orig_buf.number) then
+          new_display_count = new_display_count + 1
+        end
+      end
+    end
+
+    if new_display_count > 0 and BAFA_WIN_ID ~= nil then
+      -- Keep cursor at the same display line if possible, or move to last line
       local max_line = math.max(unpack(selected_indices))
-      local new_cursor_line = math.min(max_line, #new_working_buffers)
+      local new_cursor_line = math.min(max_line, new_display_count)
       vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { new_cursor_line, 0 })
     end
   end
@@ -588,21 +864,21 @@ function M.move_buffer_up()
   local mode = vim.fn.mode()
   local was_in_visual_mode = mode:match("[vV]")
 
-  -- Get selection indices
+  -- Get selection indices (these are display indices)
   local selected_indices = get_selected_indices()
   local moved = false
   local new_cursor_line
 
   if was_in_visual_mode and #selected_indices > 1 then
-    -- Move range as a block
-    local start_idx = math.min(unpack(selected_indices))
-    local end_idx = math.max(unpack(selected_indices))
-    local range_size = end_idx - start_idx + 1
+    -- Move range as a block in display order
+    local start_display_idx = math.min(unpack(selected_indices))
+    local end_display_idx = math.max(unpack(selected_indices))
+    local range_size = end_display_idx - start_display_idx + 1
 
-    if State.move_buffer_range_up(start_idx, end_idx) then
+    if State.move_range_in_display_order(start_display_idx, end_display_idx, "up") then
       -- Calculate new selection positions (moved up by 1)
-      local new_start_idx = math.max(1, start_idx - 1)
-      local new_end_idx = new_start_idx + range_size - 1
+      local new_start_display_idx = math.max(1, start_display_idx - 1)
+      local new_end_display_idx = new_start_display_idx + range_size - 1
 
       -- Refresh UI first to update buffer contents
       refresh_ui()
@@ -617,10 +893,10 @@ function M.move_buffer_up()
           and vim.api.nvim_buf_is_valid(BAFA_BUF_ID)
         then
           -- Set visual selection marks (bufnum, lnum, col, off)
-          vim.fn.setpos("'<", { BAFA_BUF_ID, new_start_idx, 1, 0 })
-          vim.fn.setpos("'>", { BAFA_BUF_ID, new_end_idx, 1, 0 })
+          vim.fn.setpos("'<", { BAFA_BUF_ID, new_start_display_idx, 1, 0 })
+          vim.fn.setpos("'>", { BAFA_BUF_ID, new_end_display_idx, 1, 0 })
           -- Set cursor to start of selection
-          vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { new_start_idx, 0 })
+          vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { new_start_display_idx, 0 })
           -- Re-enter visual mode
           vim.cmd("normal! gv")
         end
@@ -628,11 +904,12 @@ function M.move_buffer_up()
       return -- Early return since refresh_ui is called above
     end
   else
-    -- Single buffer move
+    -- Single buffer move in display order
     local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
-    if State.move_buffer_up(selected_line_number) then
+
+    if State.move_in_display_order(selected_line_number, "up") then
       moved = true
-      new_cursor_line = selected_line_number - 1
+      new_cursor_line = math.max(1, selected_line_number - 1)
     end
   end
 
@@ -661,21 +938,23 @@ function M.move_buffer_down()
   local mode = vim.fn.mode()
   local was_in_visual_mode = mode:match("[vV]")
 
-  -- Get selection indices
+  -- Get selection indices (these are display indices)
   local selected_indices = get_selected_indices()
   local moved = false
   local new_cursor_line
 
   if was_in_visual_mode and #selected_indices > 1 then
-    -- Move range as a block
-    local start_idx = math.min(unpack(selected_indices))
-    local end_idx = math.max(unpack(selected_indices))
-    local range_size = end_idx - start_idx + 1
+    -- Move range as a block in display order
+    local start_display_idx = math.min(unpack(selected_indices))
+    local end_display_idx = math.max(unpack(selected_indices))
+    local range_size = end_display_idx - start_display_idx + 1
 
-    if State.move_buffer_range_down(start_idx, end_idx) then
+    if State.move_range_in_display_order(start_display_idx, end_display_idx, "down") then
       -- Calculate new selection positions (moved down by 1)
-      local new_start_idx = start_idx + 1
-      local new_end_idx = new_start_idx + range_size - 1
+      local display_order = State.get_display_order()
+      local max_display_idx = #display_order
+      local new_start_display_idx = math.min(max_display_idx, start_display_idx + 1)
+      local new_end_display_idx = math.min(max_display_idx, new_start_display_idx + range_size - 1)
 
       -- Refresh UI first to update buffer contents
       refresh_ui()
@@ -689,14 +968,11 @@ function M.move_buffer_down()
           and BAFA_BUF_ID ~= nil
           and vim.api.nvim_buf_is_valid(BAFA_BUF_ID)
         then
-          local working_buffers = State.get_working_buffers()
-          -- Clamp to valid range
-          new_end_idx = math.min(new_end_idx, #working_buffers)
           -- Set visual selection marks (bufnum, lnum, col, off)
-          vim.fn.setpos("'<", { BAFA_BUF_ID, new_start_idx, 1, 0 })
-          vim.fn.setpos("'>", { BAFA_BUF_ID, new_end_idx, 1, 0 })
+          vim.fn.setpos("'<", { BAFA_BUF_ID, new_start_display_idx, 1, 0 })
+          vim.fn.setpos("'>", { BAFA_BUF_ID, new_end_display_idx, 1, 0 })
           -- Set cursor to start of selection
-          vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { new_start_idx, 0 })
+          vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { new_start_display_idx, 0 })
           -- Re-enter visual mode
           vim.cmd("normal! gv")
         end
@@ -704,22 +980,22 @@ function M.move_buffer_down()
       return -- Early return since refresh_ui is called above
     end
   else
-    -- Single buffer move
+    -- Single buffer move in display order
     local selected_line_number = vim.api.nvim_win_get_cursor(0)[1]
     if selected_line_number == nil then
       return
     end
-    if State.move_buffer_down(selected_line_number) then
+
+    local display_order = State.get_display_order()
+    if State.move_in_display_order(selected_line_number, "down") then
       moved = true
-      new_cursor_line = selected_line_number + 1
+      new_cursor_line = math.min(#display_order, selected_line_number + 1)
     end
   end
 
   if moved then
     refresh_ui()
     if new_cursor_line and BAFA_WIN_ID ~= nil then
-      local working_buffers = State.get_working_buffers()
-      new_cursor_line = math.min(new_cursor_line, #working_buffers)
       vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { new_cursor_line, 0 })
     end
   end
@@ -728,8 +1004,13 @@ end
 ---Commit changes (Enter key)
 ---Deletes buffers that were removed from the list and saves the order
 ---@returns nil
-function M.commit_changes()
+---Commit changes (deletes buffers, saves order)
+---@param on_complete function|nil Optional callback to call after commit completes
+function M.commit_changes(on_complete)
   if not State.has_changes() then
+    if on_complete then
+      on_complete()
+    end
     return
   end
 
@@ -737,19 +1018,40 @@ function M.commit_changes()
 
   -- Delete buffers that were removed from the list
   local original_buffers = State.get_original_buffers()
-  local working_numbers = {}
+  -- Use paths for comparison since buffer numbers can change
+  local working_paths = {}
   for _, buf in ipairs(working_buffers) do
-    if buf and buf.number and vim.api.nvim_buf_is_valid(buf.number) then
-      working_numbers[buf.number] = true
+    if buf and buf.path and buf.path ~= "" then
+      working_paths[buf.path] = buf
     end
   end
 
   local buffers_to_delete = {}
   for _, buf in ipairs(original_buffers) do
-    if buf and buf.number then
-      if not working_numbers[buf.number] then
+    if buf and buf.path and buf.path ~= "" then
+      if not working_paths[buf.path] then
         -- Buffer was removed from working list, mark it for deletion
-        if vim.api.nvim_buf_is_valid(buf.number) then
+        -- Find the current buffer with this path (buffer number might have changed)
+        local current_buf = nil
+        local all_buffers = vim.api.nvim_list_bufs()
+        for _, bufnr in ipairs(all_buffers) do
+          if vim.api.nvim_buf_is_valid(bufnr) then
+            local success, buffer_name = pcall(vim.api.nvim_buf_get_name, bufnr)
+            if success and buffer_name == buf.path then
+              current_buf = {
+                number = bufnr,
+                path = buf.path,
+                name = buf.name,
+              }
+              break
+            end
+          end
+        end
+        -- If we found a current buffer with this path, add it to deletion list
+        -- Otherwise, use the original buffer info (it might have been deleted already)
+        if current_buf then
+          table.insert(buffers_to_delete, current_buf)
+        elseif buf.number and vim.api.nvim_buf_is_valid(buf.number) then
           table.insert(buffers_to_delete, buf)
         end
       end
@@ -785,39 +1087,234 @@ function M.commit_changes()
         for _, buf in ipairs(buffers_to_delete) do
           State.add_buffer(buf)
         end
+        if on_complete then
+          on_complete()
+        end
         return
       end
 
       -- User confirmed, delete all buffers that were removed from the list
+      -- First, check all windows and switch away from buffers that will be deleted
+      local deleted_paths = {}
       for _, buf in ipairs(buffers_to_delete) do
-        if vim.api.nvim_buf_is_valid(buf.number) then
+        if buf and buf.path then
+          deleted_paths[buf.path] = buf
+        end
+      end
+
+      -- Find a buffer to switch to that's not being deleted
+      local switch_to_buf = nil
+      for _, buf in ipairs(working_buffers) do
+        if buf and buf.path and buf.path ~= "" and not deleted_paths[buf.path] then
+          -- Find the current buffer with this path
+          local all_buffers = vim.api.nvim_list_bufs()
+          for _, bufnr in ipairs(all_buffers) do
+            if vim.api.nvim_buf_is_valid(bufnr) then
+              local success, buffer_name = pcall(vim.api.nvim_buf_get_name, bufnr)
+              if success and buffer_name == buf.path then
+                switch_to_buf = bufnr
+                break
+              end
+            end
+          end
+          if switch_to_buf then
+            break
+          end
+        end
+      end
+
+      -- Close bafa window only if all buffers are being deleted (no buffer to switch to)
+      if not switch_to_buf and BAFA_WIN_ID ~= nil and vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
+        close_window()
+        -- Ensure the window is fully closed before proceeding
+        BAFA_WIN_ID = nil
+        BAFA_BUF_ID = nil
+      end
+
+      -- Check all windows and switch any that are displaying buffers to be deleted
+      local all_windows = vim.api.nvim_list_wins()
+      for _, win_id in ipairs(all_windows) do
+        if vim.api.nvim_win_is_valid(win_id) then
+          local win_buf = vim.api.nvim_win_get_buf(win_id)
+          local win_buf_will_be_deleted = false
+          for _, buf in ipairs(buffers_to_delete) do
+            if buf.number == win_buf then
+              win_buf_will_be_deleted = true
+              break
+            end
+          end
+
+          if win_buf_will_be_deleted then
+            if switch_to_buf and vim.api.nvim_buf_is_valid(switch_to_buf) then
+              -- Switch to a buffer that's not being deleted
+              pcall(vim.api.nvim_win_set_buf, win_id, switch_to_buf)
+            else
+              -- All buffers are being deleted, force delete the current buffer in this window
+              pcall(vim.api.nvim_buf_delete, win_buf, { force = true })
+            end
+          end
+        end
+      end
+
+      -- Now delete all buffers (nvim_buf_delete with force=true will handle any remaining issues)
+      for _, buf in ipairs(buffers_to_delete) do
+        if buf.number and vim.api.nvim_buf_is_valid(buf.number) then
           pcall(vim.api.nvim_buf_delete, buf.number, { force = true })
         end
       end
 
-      -- Save the order before refreshing state
-      State.save_order()
-
       -- Refresh state with actual buffers after commit (order will be applied in init)
-      local new_buffers = BufferUtils.get_buffers_as_table()
-      State.init(new_buffers)
+      -- Use vim.schedule to ensure buffers are fully deleted before getting the list
+      vim.schedule(function()
+        local new_buffers = BufferUtils.get_buffers_as_table()
+        -- Filter out any buffers that were supposed to be deleted (in case they're still in the list)
+        local deleted_paths_async = {}
+        for _, buf in ipairs(buffers_to_delete) do
+          if buf and buf.path then
+            deleted_paths_async[buf.path] = true
+          end
+        end
+        local filtered_buffers = {}
+        for _, buf in ipairs(new_buffers) do
+          if buf and buf.path and not deleted_paths_async[buf.path] then
+            table.insert(filtered_buffers, buf)
+          end
+        end
+        State.init(filtered_buffers)
+
+        -- Save the order AFTER state is refreshed with the correct buffers
+        -- This ensures deleted buffers are not in the persisted order
+        State.save_order()
+
+        if on_complete then
+          on_complete()
+        end
+      end)
     end)
     return
   end
 
   -- No modified buffers, proceed with deletion
+  -- First, check all windows and switch away from buffers that will be deleted
+  local deleted_paths = {}
   for _, buf in ipairs(buffers_to_delete) do
-    if vim.api.nvim_buf_is_valid(buf.number) then
+    if buf and buf.path then
+      deleted_paths[buf.path] = buf
+    end
+  end
+
+  -- Find a buffer to switch to that's not being deleted
+  local switch_to_buf = nil
+  for _, buf in ipairs(working_buffers) do
+    if buf and buf.path and buf.path ~= "" and not deleted_paths[buf.path] then
+      -- Find the current buffer with this path
+      local all_buffers = vim.api.nvim_list_bufs()
+      for _, bufnr in ipairs(all_buffers) do
+        if vim.api.nvim_buf_is_valid(bufnr) then
+          local success, buffer_name = pcall(vim.api.nvim_buf_get_name, bufnr)
+          if success and buffer_name == buf.path then
+            switch_to_buf = bufnr
+            break
+          end
+        end
+      end
+      if switch_to_buf then
+        break
+      end
+    end
+  end
+
+  -- Close bafa window only if all buffers are being deleted (no buffer to switch to)
+  if not switch_to_buf and BAFA_WIN_ID ~= nil and vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
+    close_window()
+    -- Ensure the window is fully closed before proceeding
+    BAFA_WIN_ID = nil
+    BAFA_BUF_ID = nil
+  end
+
+  -- Check all windows and switch any that are displaying buffers to be deleted
+  local all_windows = vim.api.nvim_list_wins()
+  for _, win_id in ipairs(all_windows) do
+    if vim.api.nvim_win_is_valid(win_id) then
+      local win_buf = vim.api.nvim_win_get_buf(win_id)
+      local win_buf_will_be_deleted = false
+      for _, buf in ipairs(buffers_to_delete) do
+        if buf.number == win_buf then
+          win_buf_will_be_deleted = true
+          break
+        end
+      end
+
+      if win_buf_will_be_deleted then
+        if switch_to_buf and vim.api.nvim_buf_is_valid(switch_to_buf) then
+          -- Switch to a buffer that's not being deleted
+          pcall(vim.api.nvim_win_set_buf, win_id, switch_to_buf)
+        else
+          -- All buffers are being deleted, force delete the current buffer in this window
+          pcall(vim.api.nvim_buf_delete, win_buf, { force = true })
+        end
+      end
+    end
+  end
+
+  -- Now delete all buffers (nvim_buf_delete with force=true will handle any remaining issues)
+  for _, buf in ipairs(buffers_to_delete) do
+    if buf.number and vim.api.nvim_buf_is_valid(buf.number) then
       pcall(vim.api.nvim_buf_delete, buf.number, { force = true })
     end
   end
 
-  -- Save the order before refreshing state
-  State.save_order()
-
   -- Refresh state with actual buffers after commit (order will be applied in init)
-  local new_buffers = BufferUtils.get_buffers_as_table()
-  State.init(new_buffers)
+  -- Use vim.schedule to ensure buffers are fully deleted before getting the list
+  vim.schedule(function()
+    local new_buffers = BufferUtils.get_buffers_as_table()
+    -- Filter out any buffers that were supposed to be deleted (in case they're still in the list)
+    local deleted_paths_async = {}
+    for _, buf in ipairs(buffers_to_delete) do
+      if buf and buf.path then
+        deleted_paths_async[buf.path] = true
+      end
+    end
+    local filtered_buffers = {}
+    for _, buf in ipairs(new_buffers) do
+      if buf and buf.path and not deleted_paths_async[buf.path] then
+        table.insert(filtered_buffers, buf)
+      end
+    end
+    State.init(filtered_buffers)
+
+    -- Save the order AFTER state is refreshed with the correct buffers
+    -- This ensures deleted buffers are not in the persisted order
+    State.save_order()
+
+    if on_complete then
+      on_complete()
+    end
+  end)
+end
+
+---Commit changes and refresh UI without closing
+---Commits changes (deletes buffers, saves order) and refreshes the UI
+---@returns nil
+function M.commit_changes_and_refresh()
+  M.commit_changes(function()
+    -- Refresh UI to reflect the committed state
+    refresh_ui()
+  end)
+end
+
+---Commit changes and close UI
+---Commits changes (deletes buffers, saves order), refreshes the UI, and closes the window
+---@returns nil
+function M.commit_changes_and_close()
+  M.commit_changes(function()
+    -- Refresh UI to reflect the committed state
+    refresh_ui()
+    -- Close the window
+    close_window()
+    -- Restore cursor when closing the window
+    UiUtils.revert_patches()
+  end)
 end
 
 ---Reject changes (Escape key in normal mode)
@@ -899,6 +1396,9 @@ function M.toggle()
   vim.api.nvim_buf_set_name(BAFA_BUF_ID, "bafa-menu")
   vim.bo[BAFA_BUF_ID].buftype = "nofile"
   vim.bo[BAFA_BUF_ID].bufhidden = "delete"
+
+  -- Initialize signs for gitsigns-like UX
+  init_signs()
 
   -- Refresh UI from state
   refresh_ui()
