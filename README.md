@@ -209,6 +209,11 @@ without commiting any UI changes.
 That means that no buffers will be deleted
 and no buffer switch will happen.
 
+### Undo/Redo
+
+Press `u` to undo the last change in the UI.
+Press `Ctrl+r` to redo the last undone change in the UI.
+
 
 
 [badge-made-with-lua]: assets/badge-made-with-lua.svg
