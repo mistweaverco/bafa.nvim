@@ -1,11 +1,14 @@
 <div align="center">
 
-![Bafa Logo](logo.svg)
+![Bafa.nvim Logo][logo]
 
 # bafa.nvim
 
-![Lua](https://img.shields.io/badge/Made%20with%20Lua-blueviolet.svg?style=for-the-badge&logo=lua)
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/mistweaverco/bafa.nvim?style=for-the-badge)](https://github.com/mistweaverco/bafa.nvim/releases/latest)
+[![Made with love][badge-made-with-love]][contributors]
+[![Development status][badge-development-status]][development-status]
+[![Our manifesto][badge-our-manifesto]][our-manifesto]
+![Made with lua][badge-made-with-lua]
+[![Latest release][badge-latest-release]][latest-release]
 
 [Requirements](#requirements) • [Install](#install) • [Usage](#usage)
 
@@ -143,3 +146,16 @@ For persistent changes between sessions, consider using
 
 Press `q` or `<ESC>` to close the window,
 without commiting any UI changes.
+
+
+
+[badge-made-with-lua]: assets/badge-made-with-lua.svg
+[badge-development-status]: assets/badge-development-status.svg
+[badge-our-manifesto]: assets/badge-our-manifesto.svg
+[badge-made-with-love]: assets/badge-made-with-love.svg
+[our-manifesto]: https://mistweaverco.com/manifesto
+[development-status]: https://github.com/orgs/mistweaverco/projects/5/views/1?filterQuery=repo%3Amistweaverco%2Fbafa.nvim
+[contributors]: https://github.com/mistweaverco/bafa.nvim/graphs/contributors
+[logo]: assets/logo.svg
+[badge-latest-release]: https://img.shields.io/github/v/release/mistweaverco/bafa.nvim?style=for-the-badge
+[latest-release]: https://github.com/mistweaverco/bafa.nvim/releases/latest
