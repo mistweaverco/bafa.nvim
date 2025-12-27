@@ -360,32 +360,6 @@ function M.is_working_buffers_empty()
   return #state.working_buffers == 0
 end
 
--- Undo last change
-function M.undo()
-  if state.history_index <= 1 then
-    return false
-  end
-
-  state.history_index = state.history_index - 1
-  state.working_buffers = copy_buffer_list(state.history[state.history_index])
-  -- Rebuild display_order: working buffers in their order, then deleted buffers at their original positions
-  rebuild_display_order()
-  return true
-end
-
--- Redo last undone change
-function M.redo()
-  if state.history_index >= #state.history then
-    return false
-  end
-
-  state.history_index = state.history_index + 1
-  state.working_buffers = copy_buffer_list(state.history[state.history_index])
-  -- Rebuild display_order: working buffers in their order, then deleted buffers at their original positions
-  rebuild_display_order()
-  return true
-end
-
 -- Rebuild display_order from working_buffers and original_buffers
 -- Keeps deleted buffers at their original positions
 local function rebuild_display_order()
@@ -433,6 +407,32 @@ local function rebuild_display_order()
   end
 
   state.display_order = new_display_order
+end
+
+-- Undo last change
+function M.undo()
+  if state.history_index <= 1 then
+    return false
+  end
+
+  state.history_index = state.history_index - 1
+  state.working_buffers = copy_buffer_list(state.history[state.history_index])
+  -- Rebuild display_order: working buffers in their order, then deleted buffers at their original positions
+  rebuild_display_order()
+  return true
+end
+
+-- Redo last undone change
+function M.redo()
+  if state.history_index >= #state.history then
+    return false
+  end
+
+  state.history_index = state.history_index + 1
+  state.working_buffers = copy_buffer_list(state.history[state.history_index])
+  -- Rebuild display_order: working buffers in their order, then deleted buffers at their original positions
+  rebuild_display_order()
+  return true
 end
 
 -- Reset to original state (reject changes)
