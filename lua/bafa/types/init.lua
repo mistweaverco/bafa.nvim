@@ -70,8 +70,20 @@ M.BafaConfigNotifyProvider = {
 ---@field Info string
 ---@field Hint string
 
+---@class BafaConfigIconsSign
+---@field changes string Sign character for modified/deleted buffers
+
 ---@class BafaConfigIcons
 ---@field diagnostics BafaConfigIconsDiagnostics
+---@field sign BafaConfigIconsSign
+
+---@class BafaConfigHlSign
+---@field modified string Highlight group for modified buffer signs
+---@field deleted string Highlight group for deleted buffer signs
+
+---@class BafaConfigHl
+---@field modified string Highlight group for modified buffer text
+---@field sign BafaConfigHlSign Highlight groups for signs
 
 ---@class BafaDefaultConfig
 ---@field title string
@@ -79,11 +91,19 @@ M.BafaConfigNotifyProvider = {
 ---@field border BafaConfigBorder
 ---@field style BafaConfigStyle
 ---@field diagnostics boolean
----@field modified_hl string
 ---@field line_numbers boolean
 ---@field log_level BafaLoggerLogLevelNames
 ---@field notify BafaConfigNotify
 ---@field icons BafaConfigIcons
+---@field hl BafaConfigHl Highlight groups configuration
+
+---@class BafaUserConfigHlSign
+---@field modified string|nil
+---@field deleted string|nil
+
+---@class BafaUserConfigHl
+---@field modified string|nil
+---@field sign BafaUserConfigHlSign|nil
 
 ---@class BafaUserConfig
 ---@field title string|nil
@@ -91,11 +111,11 @@ M.BafaConfigNotifyProvider = {
 ---@field border BafaConfigBorder|nil
 ---@field style BafaConfigStyle|nil
 ---@field diagnostics boolean|nil
----@field modified_hl string|nil
 ---@field line_numbers boolean|nil
 ---@field log_level BafaLoggerLogLevelNames|nil
 ---@field notify BafaConfigNotify|nil
 ---@field icons BafaConfigIcons|nil
+---@field hl BafaUserConfigHl|nil
 
 ---@class BafaState
 ---@field sorting BafaSorting|nil

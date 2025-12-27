@@ -15,6 +15,7 @@ local state = {
   sorting = nil,
   original_buffers = {}, -- Original buffer list when menu opened
   working_buffers = {}, -- Current working buffer list (with modifications)
+  display_order = {}, -- Display order including both working and deleted buffers (for UI)
   history = {}, -- History for undo/redo
   history_index = 0, -- Current position in history
 }
@@ -161,6 +162,7 @@ function M.init(initial_buffers)
   state.sorting = sorting
   state.original_buffers = copy_buffer_list(ordered_buffers)
   state.working_buffers = copy_buffer_list(ordered_buffers)
+  state.display_order = copy_buffer_list(ordered_buffers) -- Display order starts same as working
   state.history = { copy_buffer_list(ordered_buffers) }
   state.history_index = 1
 end
@@ -198,6 +200,7 @@ function M.delete_buffer_at_index(idx)
     return false
   end
 
+  -- Remove from working_buffers (it stays in display_order)
   table.remove(state.working_buffers, idx)
   save_current_to_history()
   return true
@@ -298,11 +301,50 @@ function M.move_buffer_range_down(start_idx, end_idx)
   return true
 end
 
----Add buffer to list
+---Add buffer to list (restores a deleted buffer)
 ---@param buffer BafaBuffer: Buffer to add
 ---@returns boolean: True if added
 function M.add_buffer(buffer)
-  table.insert(state.working_buffers, buffer)
+  -- Buffer is already in display_order, add it back to working_buffers
+  -- Insert it at the position that matches its position in display_order relative to other working buffers
+  local buffer_num = buffer and buffer.number
+  if not buffer_num then
+    return false
+  end
+
+  -- Find the buffer's position in display_order
+  local display_pos = nil
+  for i, d_buf in ipairs(state.display_order) do
+    if d_buf and d_buf.number == buffer_num then
+      display_pos = i
+      break
+    end
+  end
+
+  if not display_pos then
+    -- Buffer not in display_order, just append
+    table.insert(state.working_buffers, buffer)
+  else
+    -- Count how many working buffers come before this position in display_order
+    local working_before_count = 0
+    local working_buffer_map = {}
+    for _, w_buf in ipairs(state.working_buffers) do
+      if w_buf and w_buf.number then
+        working_buffer_map[w_buf.number] = true
+      end
+    end
+
+    for i = 1, display_pos - 1 do
+      local d_buf = state.display_order[i]
+      if d_buf and d_buf.number and working_buffer_map[d_buf.number] then
+        working_before_count = working_before_count + 1
+      end
+    end
+
+    -- Insert at the calculated position (1-indexed)
+    table.insert(state.working_buffers, working_before_count + 1, buffer)
+  end
+
   save_current_to_history()
   return true
 end
@@ -326,6 +368,8 @@ function M.undo()
 
   state.history_index = state.history_index - 1
   state.working_buffers = copy_buffer_list(state.history[state.history_index])
+  -- Rebuild display_order: working buffers in their order, then deleted buffers at their original positions
+  rebuild_display_order()
   return true
 end
 
@@ -337,12 +381,64 @@ function M.redo()
 
   state.history_index = state.history_index + 1
   state.working_buffers = copy_buffer_list(state.history[state.history_index])
+  -- Rebuild display_order: working buffers in their order, then deleted buffers at their original positions
+  rebuild_display_order()
   return true
+end
+
+-- Rebuild display_order from working_buffers and original_buffers
+-- Keeps deleted buffers at their original positions
+local function rebuild_display_order()
+  local working_buffer_map = {}
+  for _, buf in ipairs(state.working_buffers) do
+    if buf and buf.number then
+      working_buffer_map[buf.number] = true
+    end
+  end
+
+  -- Start with working buffers in their current order
+  local new_display_order = {}
+  for _, w_buf in ipairs(state.working_buffers) do
+    if w_buf and w_buf.number then
+      table.insert(new_display_order, w_buf)
+    end
+  end
+
+  -- Add deleted buffers at their original positions
+  for _, orig_buf in ipairs(state.original_buffers) do
+    if orig_buf and orig_buf.number and not working_buffer_map[orig_buf.number] then
+      if vim.api.nvim_buf_is_valid(orig_buf.number) then
+        -- Find where to insert based on original position
+        local orig_pos = nil
+        for i, o_buf in ipairs(state.original_buffers) do
+          if o_buf and o_buf.number == orig_buf.number then
+            orig_pos = i
+            break
+          end
+        end
+        if orig_pos then
+          -- Count how many working buffers were originally before this position
+          local working_before_count = 0
+          for i = 1, orig_pos - 1 do
+            local prev_orig = state.original_buffers[i]
+            if prev_orig and prev_orig.number and working_buffer_map[prev_orig.number] then
+              working_before_count = working_before_count + 1
+            end
+          end
+          -- Insert at position: working_before_count + 1 (1-indexed)
+          table.insert(new_display_order, working_before_count + 1, orig_buf)
+        end
+      end
+    end
+  end
+
+  state.display_order = new_display_order
 end
 
 -- Reset to original state (reject changes)
 function M.reset()
   state.working_buffers = copy_buffer_list(state.original_buffers)
+  state.display_order = copy_buffer_list(state.original_buffers)
   state.history = { copy_buffer_list(state.original_buffers) }
   state.history_index = 1
 end
@@ -355,8 +451,32 @@ function M.save_order()
   local ordererd_buffers = {}
   for _, buf in ipairs(state.working_buffers) do
     -- Only save valid buffers with paths (skip unnamed buffers and invalid buffers)
-    if buf and buf.number and vim.api.nvim_buf_is_valid(buf.number) and buf.path and buf.path ~= "" then
-      table.insert(ordererd_buffers, buf.path)
+    -- Double-check that the buffer still exists in Neovim before saving
+    if buf and buf.path and buf.path ~= "" then
+      -- Check if buffer number is valid, or if we can find the buffer by path
+      local should_save = false
+      if buf.number and vim.api.nvim_buf_is_valid(buf.number) then
+        -- Verify the buffer path matches (in case buffer number was reused)
+        local success, buffer_name = pcall(vim.api.nvim_buf_get_name, buf.number)
+        if success and buffer_name == buf.path then
+          should_save = true
+        end
+      else
+        -- Buffer number is invalid, check if any current buffer has this path
+        local current_buffers = vim.api.nvim_list_bufs()
+        for _, bufnr in ipairs(current_buffers) do
+          if vim.api.nvim_buf_is_valid(bufnr) then
+            local success, buffer_name = pcall(vim.api.nvim_buf_get_name, bufnr)
+            if success and buffer_name == buf.path then
+              should_save = true
+              break
+            end
+          end
+        end
+      end
+      if should_save then
+        table.insert(ordererd_buffers, buf.path)
+      end
     end
   end
   -- check if plugin kikao.nvim is installed
@@ -450,6 +570,117 @@ function M.get_persisted_cursor_line(max_line)
   end
 
   return cursor_line
+end
+
+---Get display order (includes both working and deleted buffers)
+---@return BafaBuffer[]
+function M.get_display_order()
+  return state.display_order
+end
+
+---Sync working_buffers order to match display_order (only for buffers that are in working_buffers)
+local function sync_working_buffers_from_display_order()
+  -- Create a map of buffer numbers to their buffers in working_buffers
+  local working_buffer_map = {}
+  for _, buf in ipairs(state.working_buffers) do
+    if buf and buf.number then
+      working_buffer_map[buf.number] = buf
+    end
+  end
+
+  -- Rebuild working_buffers in display_order order
+  local new_working_buffers = {}
+  for _, d_buf in ipairs(state.display_order) do
+    if d_buf and d_buf.number and working_buffer_map[d_buf.number] then
+      table.insert(new_working_buffers, working_buffer_map[d_buf.number])
+    end
+  end
+
+  state.working_buffers = new_working_buffers
+end
+
+---Move buffer in display order (works for both working and deleted buffers)
+---@param display_idx number Display index (1-indexed)
+---@param direction string "up" or "down"
+---@return boolean True if moved
+function M.move_in_display_order(display_idx, direction)
+  if direction == "up" then
+    if display_idx <= 1 or display_idx > #state.display_order then
+      return false
+    end
+    local temp = state.display_order[display_idx]
+    state.display_order[display_idx] = state.display_order[display_idx - 1]
+    state.display_order[display_idx - 1] = temp
+    -- Sync working_buffers order to match display_order for working buffers
+    sync_working_buffers_from_display_order()
+    save_current_to_history()
+    return true
+  elseif direction == "down" then
+    if display_idx < 1 or display_idx >= #state.display_order then
+      return false
+    end
+    local temp = state.display_order[display_idx]
+    state.display_order[display_idx] = state.display_order[display_idx + 1]
+    state.display_order[display_idx + 1] = temp
+    -- Sync working_buffers order to match display_order for working buffers
+    sync_working_buffers_from_display_order()
+    save_current_to_history()
+    return true
+  end
+  return false
+end
+
+---Move a range of buffers in display order
+---@param start_display_idx number Start display index (1-indexed)
+---@param end_display_idx number End display index (1-indexed)
+---@param direction string "up" or "down"
+---@return boolean True if moved
+function M.move_range_in_display_order(start_display_idx, end_display_idx, direction)
+  if direction == "up" then
+    if
+      start_display_idx <= 1
+      or start_display_idx > #state.display_order
+      or end_display_idx > #state.display_order
+      or start_display_idx > end_display_idx
+    then
+      return false
+    end
+    local range = {}
+    for i = start_display_idx, end_display_idx do
+      table.insert(range, state.display_order[i])
+    end
+    local item_above = state.display_order[start_display_idx - 1]
+
+    for i = 0, #range - 1 do
+      state.display_order[start_display_idx - 1 + i] = range[i + 1]
+    end
+    state.display_order[end_display_idx] = item_above
+
+    -- Sync working_buffers order to match display_order
+    sync_working_buffers_from_display_order()
+    save_current_to_history()
+    return true
+  elseif direction == "down" then
+    if start_display_idx < 1 or end_display_idx >= #state.display_order or start_display_idx > end_display_idx then
+      return false
+    end
+    local range = {}
+    for i = start_display_idx, end_display_idx do
+      table.insert(range, state.display_order[i])
+    end
+    local item_below = state.display_order[end_display_idx + 1]
+
+    state.display_order[start_display_idx] = item_below
+    for i = 0, #range - 1 do
+      state.display_order[start_display_idx + 1 + i] = range[i + 1]
+    end
+
+    -- Sync working_buffers order to match display_order
+    sync_working_buffers_from_display_order()
+    save_current_to_history()
+    return true
+  end
+  return false
 end
 
 return M
