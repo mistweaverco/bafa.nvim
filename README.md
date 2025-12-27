@@ -10,7 +10,10 @@
 ![Made with lua][badge-made-with-lua]
 [![Latest release][badge-latest-release]][latest-release]
 
-[Requirements](#requirements) • [Install](#install) • [Usage](#usage)
+[What?](#what) •
+[Requirements](#requirements) •
+[Install](#install) •
+[Usage](#usage)
 
 <p></p>
 
@@ -27,6 +30,22 @@ It allows you to quickly switch between buffers and delete them.
 <p></p>
 
 </div>
+
+## What?
+
+Bafa.nvim is a Neovim plugin that provides a clear and efficient
+way to manage and switch between buffers using a floating window interface.
+
+It uses a notion of "commiting" changes.
+This means that any modifications you make in the UI
+are only applied to the actual buffer list
+when you commit them.
+
+A commit is done when you select a buffer to switch to,
+or an empty spot, when no buffers are left.
+
+Commits are discarded when you close the window
+without selecting a buffer.
 
 ## Requirements
 
