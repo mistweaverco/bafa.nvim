@@ -77,7 +77,7 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 ```lua
 {
   'mistweaverco/bafa.nvim',
-  version = 'v1.4.0',
+  version = 'v1.4.1',
   opts = {}
 },
 ```
@@ -93,7 +93,7 @@ See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
 ```lua
 use {
   'mistweaverco/bafa.nvim',
-  tag = 'v1.4.0',
+  tag = 'v1.4.1',
   config = function()
     require('bafa').setup({})
   end
@@ -109,7 +109,7 @@ use {
 ```lua
 vim.pack.add({
   src = 'https://github.com/mistweaverco/bafa.nvim.git',
-  version = 'v1.4.0',
+  version = 'v1.4.1',
 })
 require('bafa').setup({})
 ```
