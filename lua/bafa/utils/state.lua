@@ -158,7 +158,7 @@ end
 function M.init(initial_buffers)
   local sorting = M.get_persisted_sorting()
   -- Apply persisted order if available
-  local ordered_buffers = is_auto_sorting(sorting) and initial_buffers or apply_persisted_data(initial_buffers)
+  local ordered_buffers = is_auto_sorting(sorting) and initial_buffers or apply_persisted_data(initial_buffers, sorting)
   state.sorting = sorting
   state.original_buffers = copy_buffer_list(ordered_buffers)
   state.working_buffers = copy_buffer_list(ordered_buffers)
@@ -361,13 +361,47 @@ function M.is_working_buffers_empty()
 end
 
 -- Rebuild display_order from working_buffers and original_buffers
--- Keeps deleted buffers at their original positions
-local function rebuild_display_order()
+-- Keeps deleted buffers at their positions based on reference_order if provided, otherwise original_buffers
+-- @param reference_order BafaBuffer[]|nil Optional reference order to use instead of original_buffers
+local function rebuild_display_order(reference_order)
   local working_buffer_map = {}
   for _, buf in ipairs(state.working_buffers) do
     if buf and buf.number then
       working_buffer_map[buf.number] = true
     end
+  end
+
+  -- Check if all buffers from original_buffers are in working_buffers
+  local all_buffers_present = true
+  for _, orig_buf in ipairs(state.original_buffers) do
+    if orig_buf and orig_buf.number and not working_buffer_map[orig_buf.number] then
+      all_buffers_present = false
+      break
+    end
+  end
+
+  -- Use reference_order if provided, otherwise use original_buffers
+  local order_reference = reference_order or state.original_buffers
+
+  if all_buffers_present then
+    -- No deleted buffers, but we should still use the reference_order to preserve the correct order
+    -- Build display_order based on reference_order, using buffers from working_buffers
+    -- Create a map of buffer numbers to buffer objects from working_buffers
+    local working_buffers_by_number = {}
+    for _, w_buf in ipairs(state.working_buffers) do
+      if w_buf and w_buf.number then
+        working_buffers_by_number[w_buf.number] = w_buf
+      end
+    end
+
+    local new_display_order = {}
+    for _, ref_buf in ipairs(order_reference) do
+      if ref_buf and ref_buf.number and working_buffers_by_number[ref_buf.number] then
+        table.insert(new_display_order, working_buffers_by_number[ref_buf.number])
+      end
+    end
+    state.display_order = new_display_order
+    return
   end
 
   -- Start with working buffers in their current order
@@ -378,29 +412,29 @@ local function rebuild_display_order()
     end
   end
 
-  -- Add deleted buffers at their original positions
-  for _, orig_buf in ipairs(state.original_buffers) do
-    if orig_buf and orig_buf.number and not working_buffer_map[orig_buf.number] then
-      if vim.api.nvim_buf_is_valid(orig_buf.number) then
-        -- Find where to insert based on original position
-        local orig_pos = nil
-        for i, o_buf in ipairs(state.original_buffers) do
-          if o_buf and o_buf.number == orig_buf.number then
-            orig_pos = i
+  -- Add deleted buffers at their positions based on reference order
+  for _, ref_buf in ipairs(order_reference) do
+    if ref_buf and ref_buf.number and not working_buffer_map[ref_buf.number] then
+      if vim.api.nvim_buf_is_valid(ref_buf.number) then
+        -- Find where to insert based on reference position
+        local ref_pos = nil
+        for i, r_buf in ipairs(order_reference) do
+          if r_buf and r_buf.number == ref_buf.number then
+            ref_pos = i
             break
           end
         end
-        if orig_pos then
-          -- Count how many working buffers were originally before this position
+        if ref_pos then
+          -- Count how many working buffers come before this position in reference order
           local working_before_count = 0
-          for i = 1, orig_pos - 1 do
-            local prev_orig = state.original_buffers[i]
-            if prev_orig and prev_orig.number and working_buffer_map[prev_orig.number] then
+          for i = 1, ref_pos - 1 do
+            local prev_ref = order_reference[i]
+            if prev_ref and prev_ref.number and working_buffer_map[prev_ref.number] then
               working_before_count = working_before_count + 1
             end
           end
           -- Insert at position: working_before_count + 1 (1-indexed)
-          table.insert(new_display_order, working_before_count + 1, orig_buf)
+          table.insert(new_display_order, working_before_count + 1, ref_buf)
         end
       end
     end
@@ -415,10 +449,47 @@ function M.undo()
     return false
   end
 
+  -- Save current display_order to preserve its order
+  local current_display_order = copy_buffer_list(state.display_order)
+
   state.history_index = state.history_index - 1
   state.working_buffers = copy_buffer_list(state.history[state.history_index])
-  -- Rebuild display_order: working buffers in their order, then deleted buffers at their original positions
-  rebuild_display_order()
+
+  -- Build a map of working buffers by number (from restored working_buffers)
+  local working_buffers_by_number = {}
+  for _, w_buf in ipairs(state.working_buffers) do
+    if w_buf and w_buf.number then
+      working_buffers_by_number[w_buf.number] = w_buf
+    end
+  end
+
+  -- Build a map of which buffers are now working
+  local working_buffer_map = {}
+  for _, buf in ipairs(state.working_buffers) do
+    if buf and buf.number then
+      working_buffer_map[buf.number] = true
+    end
+  end
+
+  -- Rebuild display_order preserving the order from current_display_order
+  -- but using buffer objects from working_buffers for buffers that are now working
+  local new_display_order = {}
+  for _, disp_buf in ipairs(current_display_order) do
+    if disp_buf and disp_buf.number then
+      if working_buffer_map[disp_buf.number] then
+        -- Buffer is now working, use the object from working_buffers
+        table.insert(new_display_order, working_buffers_by_number[disp_buf.number])
+      else
+        -- Buffer is still deleted, keep it as is (but only if it's valid)
+        if vim.api.nvim_buf_is_valid(disp_buf.number) then
+          table.insert(new_display_order, disp_buf)
+        end
+      end
+    end
+  end
+
+  state.display_order = new_display_order
+
   return true
 end
 
@@ -428,10 +499,47 @@ function M.redo()
     return false
   end
 
+  -- Save current display_order to preserve its order
+  local current_display_order = copy_buffer_list(state.display_order)
+
   state.history_index = state.history_index + 1
   state.working_buffers = copy_buffer_list(state.history[state.history_index])
-  -- Rebuild display_order: working buffers in their order, then deleted buffers at their original positions
-  rebuild_display_order()
+
+  -- Build a map of working buffers by number (from restored working_buffers)
+  local working_buffers_by_number = {}
+  for _, w_buf in ipairs(state.working_buffers) do
+    if w_buf and w_buf.number then
+      working_buffers_by_number[w_buf.number] = w_buf
+    end
+  end
+
+  -- Build a map of which buffers are now working
+  local working_buffer_map = {}
+  for _, buf in ipairs(state.working_buffers) do
+    if buf and buf.number then
+      working_buffer_map[buf.number] = true
+    end
+  end
+
+  -- Rebuild display_order preserving the order from current_display_order
+  -- but using buffer objects from working_buffers for buffers that are now working
+  local new_display_order = {}
+  for _, disp_buf in ipairs(current_display_order) do
+    if disp_buf and disp_buf.number then
+      if working_buffer_map[disp_buf.number] then
+        -- Buffer is now working, use the object from working_buffers
+        table.insert(new_display_order, working_buffers_by_number[disp_buf.number])
+      else
+        -- Buffer is still deleted, keep it as is (but only if it's valid)
+        if vim.api.nvim_buf_is_valid(disp_buf.number) then
+          table.insert(new_display_order, disp_buf)
+        end
+      end
+    end
+  end
+
+  state.display_order = new_display_order
+
   return true
 end
 
@@ -487,7 +595,12 @@ function M.save_order()
     return
   end
   kikao_api.set_value({ key = "plugins.bafa.buffers", value = ordererd_buffers })
-  kikao_api.set_value({ key = "plugins.bafa.sorting", value = M.get_persisted_sorting() })
+  -- Use state.sorting directly if set, otherwise get persisted sorting
+  local sorting_to_save = state.sorting
+  if sorting_to_save == nil then
+    sorting_to_save = M.get_persisted_sorting()
+  end
+  kikao_api.set_value({ key = "plugins.bafa.sorting", value = sorting_to_save })
 end
 
 ---Get persisted sorting method
@@ -503,19 +616,73 @@ function M.get_persisted_sorting()
   return state.sorting or get_valid_sorting(sorting)
 end
 
+---Update buffer order based on new sorting mode
+---@param new_sorting BafaSorting The new sorting mode
+---@param current_buffers BafaBuffer[]|nil Optional current buffers to reorder. If nil and switching to AUTO, function returns without updating.
+---@returns boolean True if buffers were updated
+local function update_buffers_for_sorting(new_sorting, current_buffers)
+  local old_sorting = state.sorting
+  local switching_to_auto = is_auto_sorting(new_sorting) and not is_auto_sorting(old_sorting)
+  local switching_to_manual = not is_auto_sorting(new_sorting) and is_auto_sorting(old_sorting)
+
+  -- If switching to AUTO and we have current buffers, sort them by last_used
+  if switching_to_auto and current_buffers then
+    -- Create a map of current state buffers by path to preserve which buffers are in the list
+    local state_buffer_map = {}
+    for _, buf in ipairs(state.working_buffers) do
+      if buf and buf.path then
+        state_buffer_map[buf.path] = true
+      end
+    end
+
+    -- Filter fresh buffers to only include those currently in state, then sort by last_used
+    local buffers_to_sort = {}
+    for _, buf in ipairs(current_buffers) do
+      if buf and buf.path and state_buffer_map[buf.path] then
+        table.insert(buffers_to_sort, buf)
+      end
+    end
+
+    -- Sort by last_used (most recent first)
+    table.sort(buffers_to_sort, function(a, b)
+      return (a.last_used or 0) > (b.last_used or 0)
+    end)
+
+    -- Update state with sorted buffers
+    state.original_buffers = copy_buffer_list(buffers_to_sort)
+    state.working_buffers = copy_buffer_list(buffers_to_sort)
+    state.display_order = copy_buffer_list(buffers_to_sort)
+    state.history = { copy_buffer_list(buffers_to_sort) }
+    state.history_index = 1
+    return true
+  end
+
+  -- If switching to MANUAL, keep current order (it will be saved in save_order)
+  -- No need to update buffers here
+  return false
+end
+
 ---Set persisted sorting method
 ---If kikao.nvim is not installed, only updates in-memory state
 ---@param sorting BafaSorting|nil
+---@param current_buffers BafaBuffer[]|nil Optional current buffers to reorder when switching sorting modes
 ---@returns nil
-function M.set_persisted_sorting(sorting)
+function M.set_persisted_sorting(sorting, current_buffers)
+  local old_sorting = state.sorting
   state.sorting = get_valid_sorting(sorting)
-  M.save_order()
+
+  -- Update buffer order if switching modes and we have current buffers
+  local buffers_updated = update_buffers_for_sorting(state.sorting, current_buffers)
+
   local kikao_ok, kikao_api = pcall(require, "kikao.api")
   if not kikao_ok then
     Logger.warn("kikao.nvim not found, can only persist sorting in volatile state (in-memory)", "See: " .. KIKAO_URL)
     return
   end
+  -- Save sorting to kikao immediately
   kikao_api.set_value({ key = "plugins.bafa.sorting", value = state.sorting })
+  -- Save order (this will save the current buffer order)
+  M.save_order()
 end
 
 ---Save cursor line position (only in manual mode)
