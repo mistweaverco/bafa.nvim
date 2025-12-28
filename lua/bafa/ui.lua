@@ -872,6 +872,7 @@ end
 ---Toggle jump labels visibility
 function M.toggle_jump_labels()
   jump_labels_visible = jump_labels_visible ~= true
+  pending_jump_label_action = nil
   -- Refresh UI immediately so labels are visible right away
   refresh_ui()
 end
@@ -885,6 +886,7 @@ end
 ---Hide jump labels
 function M.hide_jump_labels()
   jump_labels_visible = false
+  pending_jump_label_action = nil
   refresh_ui()
 end
 
