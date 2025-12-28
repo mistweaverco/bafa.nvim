@@ -23,6 +23,11 @@ local DIAGNOSTICS_LABELS = { "Error", "Warn", "Info", "Hint" }
 local BAFA_SIGN_MODIFIED = "BafaModified"
 local BAFA_SIGN_DELETED = "BafaDeleted"
 
+-- Jump labels state
+local jump_labels_visible = false
+local jump_label_map = {} -- Maps buffer path to label letter (stable mapping)
+local pending_jump_label_action = nil -- "delete" or nil, set when g-prefixed action is pending
+
 ---Calculate window position based on config
 ---@param width number Window width
 ---@param height number Window height
@@ -290,19 +295,25 @@ end
 
 --- Calculate the width needed for signs column
 ---Accounts for the maximum number of signs needed (0, 1, or 2)
+---Also accounts for jump labels if visible
 ---Neovim reserves: 0 columns for no signs, 2 columns for 1 sign, 4 columns for 2 signs
 ---@param max_signs number Maximum number of signs needed (0, 1, or 2)
 ---@return number The width needed for the signs column
 local function get_sign_column_width(max_signs)
+  local base_width
   if max_signs == 0 then
-    return 0
+    base_width = 0
   elseif max_signs == 1 then
     -- Neovim reserves 2 columns for 1 sign (1 for sign + 1 for spacing)
-    return 2
+    base_width = 2
   else
     -- Neovim reserves 4 columns for 2 signs (2 for signs + 2 for spacing)
-    return 4
+    base_width = 4
   end
+
+  -- Add jump label width if visible (2 columns: 1 for letter + 1 for spacing)
+  local jump_label_width = jump_labels_visible and 2 or 0
+  return base_width + jump_label_width
 end
 
 --- Calculate the width needed for diagnostics icons
@@ -330,6 +341,131 @@ local function get_diagnostics_width(buffers)
     end
   end
   return max_diagnostics_width > 0 and max_diagnostics_width or 0
+end
+
+---Assign jump labels to buffers (stable mapping based on buffer path)
+---@param buffers table[] Array of buffer objects
+---@return table Map of buffer path to label letter
+local function assign_jump_labels(buffers)
+  local config = Config.get().ui.jump_labels
+  local keys = config.keys
+
+  -- Remove duplicates from keys
+  local unique_keys = {}
+  local seen = {}
+  for _, key in ipairs(keys) do
+    if not seen[key] then
+      table.insert(unique_keys, key)
+      seen[key] = true
+    end
+  end
+
+  -- Build key list: first all lowercase, then uppercase variants
+  -- This ensures lowercase is exhausted before using uppercase
+  local all_keys = {}
+  -- First pass: add all lowercase keys
+  for _, key in ipairs(unique_keys) do
+    table.insert(all_keys, key)
+  end
+  -- Second pass: add uppercase variants only
+  for _, key in ipairs(unique_keys) do
+    local upper = key:upper()
+    if upper ~= key and not seen[upper] then
+      table.insert(all_keys, upper)
+      seen[upper] = true
+    end
+  end
+
+  -- Create a stable mapping: reuse existing labels for buffers that already have them
+  local new_map = {}
+  local used_labels = {}
+
+  -- First pass: preserve existing labels for buffers that still exist
+  for _, buffer in ipairs(buffers) do
+    if buffer and buffer.path and jump_label_map[buffer.path] then
+      local existing_label = jump_label_map[buffer.path]
+      if not used_labels[existing_label] then
+        new_map[buffer.path] = existing_label
+        used_labels[existing_label] = true
+      end
+    end
+  end
+
+  -- Second pass: assign new labels to buffers without labels
+  local key_index = 1
+  for _, buffer in ipairs(buffers) do
+    if buffer and buffer.path and not new_map[buffer.path] then
+      -- Find next available key
+      while key_index <= #all_keys and used_labels[all_keys[key_index]] do
+        key_index = key_index + 1
+      end
+
+      if key_index <= #all_keys then
+        new_map[buffer.path] = all_keys[key_index]
+        used_labels[all_keys[key_index]] = true
+        key_index = key_index + 1
+      end
+      -- If we run out of keys, remaining buffers won't get labels
+    end
+  end
+
+  -- Update global map
+  jump_label_map = new_map
+  return new_map
+end
+
+---Initialize jump label highlight
+local function init_jump_label_highlight()
+  local question_hl = vim.api.nvim_get_hl(0, { name = "Question" })
+  local error_hl = vim.api.nvim_get_hl(0, { name = "Error" })
+  local select_fg = question_hl.fg
+  local error_fg = error_hl.fg
+  if select_fg then
+    vim.api.nvim_set_hl(0, "BafaJumpLabelSelect", {
+      fg = select_fg,
+      default = true,
+    })
+  else
+    vim.api.nvim_set_hl(0, "BafaJumpLabelSelect", {
+      fg = "#569CD6",
+      default = true,
+    })
+  end
+  if error_fg then
+    vim.api.nvim_set_hl(0, "BafaJumpLabelDelete", {
+      fg = error_fg,
+      default = true,
+    })
+  else
+    vim.api.nvim_set_hl(0, "BafaJumpLabelDelete", {
+      fg = "#F44747",
+      default = true,
+    })
+  end
+end
+
+---Add jump label to a buffer line
+---@param idx number Line index (1-indexed)
+---@param buffer table The buffer object
+local function add_jump_label(idx, buffer)
+  if not jump_labels_visible then return end
+  if BAFA_BUF_ID == nil or not vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then return end
+  if not buffer or not buffer.path then return end
+
+  local label = jump_label_map[buffer.path]
+  if not label then return end
+
+  -- Initialize highlight if not already done
+  init_jump_label_highlight()
+
+  -- Add jump label as virt_text positioned at the start of the line content (column 0)
+  -- This will appear before the icon (which starts at column 2 with "  ")
+  vim.api.nvim_buf_set_extmark(BAFA_BUF_ID, BAFA_NS_ID, idx - 1, 0, {
+    virt_text = { { label, pending_jump_label_action ~= "delete" and "BafaJumpLabelSelect" or "BafaJumpLabelDelete" } },
+    virt_text_pos = "overlay", -- Overlay at the specified column
+    hl_mode = "combine", -- Combine with background
+    priority = 1000, -- High priority to ensure it's visible
+  })
 end
 
 local get_buffer_icon = function(buffer)
@@ -399,6 +535,10 @@ local function close_window()
   BAFA_WIN_ID = nil
   BAFA_BUF_ID = nil
 
+  -- Reset jump labels visibility and pending actions
+  jump_labels_visible = false
+  pending_jump_label_action = nil
+
   -- Clean up diagnostic autocmd
   if BAFA_DIAGNOSTIC_AUTOCMD_ID ~= nil then
     vim.api.nvim_del_autocmd(BAFA_DIAGNOSTIC_AUTOCMD_ID)
@@ -439,6 +579,9 @@ local function refresh_ui()
     if buf and buf.number and vim.api.nvim_buf_is_valid(buf.number) then table.insert(valid_display_buffers, buf) end
   end
   display_buffers = valid_display_buffers
+
+  -- Assign jump labels to buffers (stable mapping)
+  assign_jump_labels(display_buffers)
 
   local contents = {}
   local bafa_config = Config.get()
@@ -535,6 +678,8 @@ local function refresh_ui()
       add_ft_icon_highlight(idx, buffer)
       -- add signs (gitsigns-like UX)
       update_buffer_sign(idx, buffer)
+      -- add jump labels
+      add_jump_label(idx, buffer)
       -- add diagnostics
       local ui_config_check = Config.get().ui or {}
       if ui_config_check.diagnostics then add_diagnostics_icons(idx, buffer) end
@@ -635,6 +780,9 @@ end
 
 local M = {}
 
+---Exported version of jump_labels_visible
+M.jump_labels_visible = jump_labels_visible
+
 ---Get buffer at display index (accounting for both working and deleted buffers)
 ---@param display_idx number Display line index (1-indexed)
 ---@return table|nil The buffer at the display index, or nil if out of bounds
@@ -649,6 +797,138 @@ local function get_buffer_at_display_index(display_idx)
   end
 
   return valid_display_buffers[display_idx]
+end
+
+---Find buffer by jump label
+---@param label string The jump label letter
+---@return table|nil The buffer with the given label, or nil if not found
+local function find_buffer_by_label(label)
+  local display_buffers = State.get_display_order()
+
+  -- Filter out invalid buffers
+  local valid_display_buffers = {}
+  for _, buf in ipairs(display_buffers) do
+    if buf and buf.number and vim.api.nvim_buf_is_valid(buf.number) then table.insert(valid_display_buffers, buf) end
+  end
+
+  for _, buffer in ipairs(valid_display_buffers) do
+    if buffer and buffer.path and jump_label_map[buffer.path] == label then return buffer end
+  end
+
+  return nil
+end
+
+---Select buffer by jump label and commit
+---@param label string The jump label letter
+function M.select_by_jump_label(label)
+  if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
+    -- Window not valid, pass through to normal key behavior
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(label, true, false, true), "n", false)
+    return
+  end
+
+  -- Only handle as jump label if labels are visible
+  if not jump_labels_visible then
+    -- Labels not visible, pass through to normal key behavior
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(label, true, false, true), "n", false)
+    return
+  end
+
+  -- Check if there's a pending action (from prefixed command like 'Dg')
+  if pending_jump_label_action == "delete" then
+    M.delete_by_jump_label(label)
+    return
+  end
+
+  local buffer = find_buffer_by_label(label)
+  if not buffer or not buffer.number then
+    -- No buffer with this label, pass through to normal key behavior
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(label, true, false, true), "n", false)
+    return
+  end
+
+  -- Find the display index for this buffer
+  local display_buffers = State.get_display_order()
+  local valid_display_buffers = {}
+  for _, buf in ipairs(display_buffers) do
+    if buf and buf.number and vim.api.nvim_buf_is_valid(buf.number) then table.insert(valid_display_buffers, buf) end
+  end
+
+  for idx, buf in ipairs(valid_display_buffers) do
+    if buf and buf.path == buffer.path then
+      -- Move cursor to this line
+      vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { idx, 0 })
+      -- Select the menu item (which will commit and switch)
+      M.select_menu_item()
+      -- Hide jump labels after selection
+      M.hide_jump_labels()
+      return
+    end
+  end
+end
+
+---Toggle jump labels visibility
+function M.toggle_jump_labels()
+  jump_labels_visible = jump_labels_visible ~= true
+  -- Refresh UI immediately so labels are visible right away
+  refresh_ui()
+end
+
+---Show jump labels
+function M.show_jump_labels()
+  jump_labels_visible = true
+  refresh_ui()
+end
+
+---Hide jump labels
+function M.hide_jump_labels()
+  jump_labels_visible = false
+  refresh_ui()
+end
+
+---Delete buffer by jump label
+---@param label string The jump label letter
+function M.delete_by_jump_label(label)
+  if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then return end
+
+  local buffer = find_buffer_by_label(label)
+  if not buffer or not buffer.number then return end
+
+  -- Find the display index for this buffer
+  local display_buffers = State.get_display_order()
+  local valid_display_buffers = {}
+  for _, buf in ipairs(display_buffers) do
+    if buf and buf.number and vim.api.nvim_buf_is_valid(buf.number) then table.insert(valid_display_buffers, buf) end
+  end
+
+  for idx, buf in ipairs(valid_display_buffers) do
+    if buf and buf.path == buffer.path then
+      -- Move cursor to this line
+      vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { idx, 0 })
+      -- Delete the menu item
+      M.delete_menu_item()
+      return
+    end
+  end
+end
+
+---Escape and q handler (to close the window, only when jump labels are not visible)
+---@param pass_through boolean|nil If true, passes through the keypress to jump labels
+function M.cancel_action_handler(pass_through)
+  if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then return end
+  if jump_labels_visible then
+    if pass_through then return end
+    M.hide_jump_labels()
+    return
+  end
+  M.reject_changes()
+  close_window()
+end
+
+---Set up delete action after g prefix (called from keymap)
+function M.setup_delete_by_label()
+  pending_jump_label_action = "delete"
+  M.show_jump_labels()
 end
 
 function M.select_menu_item()
@@ -1338,9 +1618,6 @@ function M.toggle()
     end
   end
 
-  Keymaps.defaults(win_info.bufnr)
-  Autocmds.defaults(win_info.bufnr)
-
   -- Set up diagnostic autocmd to refresh UI when diagnostics change
   local ui_config_check = Config.get().ui or {}
   if ui_config_check.diagnostics then
@@ -1352,6 +1629,9 @@ function M.toggle()
       desc = "Refresh bafa UI when diagnostics change",
     })
   end
+
+  Keymaps.defaults(win_info.bufnr)
+  Autocmds.defaults(win_info.bufnr)
 end
 
 return M

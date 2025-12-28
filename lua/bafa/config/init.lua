@@ -27,7 +27,7 @@ M.config_defaults = {
   },
   ui = {
     jump_labels = {
-      always_visible = true,
+      always_visible = false,
     -- Keep the keys aligned in a grid for better visibility
     -- stylua: ignore
       keys = {
