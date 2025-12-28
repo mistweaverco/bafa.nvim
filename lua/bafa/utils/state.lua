@@ -24,13 +24,9 @@ local state = {
 ---@param sorting BafaSorting|nil
 ---@returns BafaSorting
 local get_valid_sorting = function(sorting)
-  if sorting == nil then
-    return Types.BafaSorting.DEFAULT
-  end
+  if sorting == nil then return Types.BafaSorting.DEFAULT end
   for _, valid_sorting in pairs(Types.BafaSorting) do
-    if sorting == valid_sorting then
-      return sorting
-    end
+    if sorting == valid_sorting then return sorting end
   end
   return Types.BafaSorting.DEFAULT
 end
@@ -72,9 +68,7 @@ local function get_persisted_data(sorting)
   -- check if plugin kikao.nvim is installed
   -- and if so, get the persisted order from its storage
   local kikao_ok, kikao_api = pcall(require, "kikao.api")
-  if not kikao_ok then
-    return { buffers = {}, sorting = get_valid_sorting(sorting) }
-  end
+  if not kikao_ok then return { buffers = {}, sorting = get_valid_sorting(sorting) } end
   ---@type BafaBuffer[]|nil
   local ordered_buffers = kikao_api.get_value({ key = "plugins.bafa.buffers" }) or {}
   ---@type BafaSorting
@@ -117,9 +111,7 @@ local function apply_persisted_data(buffers, sorting)
         end
       end
     end
-    if not is_in_persisted then
-      table.insert(new_buffers, buf)
-    end
+    if not is_in_persisted then table.insert(new_buffers, buf) end
   end
 
   ---Build ordered list: new buffers first, then persisted order
@@ -127,9 +119,7 @@ local function apply_persisted_data(buffers, sorting)
   local ordered = {}
 
   -- Add new buffers first (sorted by last_used, most recent first)
-  table.sort(new_buffers, function(a, b)
-    return a.last_used > b.last_used
-  end)
+  table.sort(new_buffers, function(a, b) return a.last_used > b.last_used end)
   for _, buf in ipairs(new_buffers) do
     table.insert(ordered, buf)
   end
@@ -137,9 +127,7 @@ local function apply_persisted_data(buffers, sorting)
   -- Then add buffers in persisted order
   if #persisted_order > 0 then
     for _, buf_path in ipairs(persisted_order) do
-      if buffer_map[buf_path] ~= nil and used_paths[buf_path] then
-        table.insert(ordered, buffer_map[buf_path])
-      end
+      if buffer_map[buf_path] ~= nil and used_paths[buf_path] then table.insert(ordered, buffer_map[buf_path]) end
     end
   end
 
@@ -149,9 +137,7 @@ end
 ---Check if sorting is AUTO
 ---@param sorting BafaSorting
 ---@returns boolean
-local is_auto_sorting = function(sorting)
-  return sorting == Types.BafaSorting.AUTO
-end
+local is_auto_sorting = function(sorting) return sorting == Types.BafaSorting.AUTO end
 
 ---Initialize state with current buffers
 ---@param initial_buffers BafaBuffer[]
@@ -169,26 +155,18 @@ end
 
 ---Get working buffers
 ---@return BafaBuffer[]
-function M.get_working_buffers()
-  return state.working_buffers
-end
+function M.get_working_buffers() return state.working_buffers end
 
 -- Get original buffers
-function M.get_original_buffers()
-  return state.original_buffers
-end
+function M.get_original_buffers() return state.original_buffers end
 
 -- Check if there are pending changes
 function M.has_changes()
-  if #state.working_buffers ~= #state.original_buffers then
-    return true
-  end
+  if #state.working_buffers ~= #state.original_buffers then return true end
 
   for i, buf in ipairs(state.working_buffers) do
     local orig_buf = state.original_buffers[i]
-    if orig_buf == nil or buf.number ~= orig_buf.number then
-      return true
-    end
+    if orig_buf == nil or buf.number ~= orig_buf.number then return true end
   end
 
   return false
@@ -196,9 +174,7 @@ end
 
 -- Delete buffer at index
 function M.delete_buffer_at_index(idx)
-  if idx < 1 or idx > #state.working_buffers then
-    return false
-  end
+  if idx < 1 or idx > #state.working_buffers then return false end
 
   -- Remove from working_buffers (it stays in display_order)
   table.remove(state.working_buffers, idx)
@@ -210,9 +186,7 @@ end
 ---@param idx number: Index of the buffer to move up
 ---@returns boolean: True if moved, false if not (e.g., at top)
 function M.move_buffer_up(idx)
-  if idx <= 1 or idx > #state.working_buffers then
-    return false
-  end
+  if idx <= 1 or idx > #state.working_buffers then return false end
 
   local temp = state.working_buffers[idx]
   state.working_buffers[idx] = state.working_buffers[idx - 1]
@@ -225,9 +199,7 @@ end
 ---@param idx number: Index of the buffer to move down
 ---@returns boolean: True if moved, false if not (e.g., at bottom)
 function M.move_buffer_down(idx)
-  if idx < 1 or idx >= #state.working_buffers then
-    return false
-  end
+  if idx < 1 or idx >= #state.working_buffers then return false end
 
   local temp = state.working_buffers[idx]
   state.working_buffers[idx] = state.working_buffers[idx + 1]
@@ -278,9 +250,7 @@ end
 ---@param end_idx number: End index of the range (1-indexed, inclusive)
 ---@returns boolean: True if moved, false if not (e.g., at bottom)
 function M.move_buffer_range_down(start_idx, end_idx)
-  if start_idx < 1 or end_idx >= #state.working_buffers or start_idx > end_idx then
-    return false
-  end
+  if start_idx < 1 or end_idx >= #state.working_buffers or start_idx > end_idx then return false end
 
   -- Extract the range to move and the item below
   local range = {}
@@ -308,9 +278,7 @@ function M.add_buffer(buffer)
   -- Buffer is already in display_order, add it back to working_buffers
   -- Insert it at the position that matches its position in display_order relative to other working buffers
   local buffer_num = buffer and buffer.number
-  if not buffer_num then
-    return false
-  end
+  if not buffer_num then return false end
 
   -- Find the buffer's position in display_order
   local display_pos = nil
@@ -329,9 +297,7 @@ function M.add_buffer(buffer)
     local working_before_count = 0
     local working_buffer_map = {}
     for _, w_buf in ipairs(state.working_buffers) do
-      if w_buf and w_buf.number then
-        working_buffer_map[w_buf.number] = true
-      end
+      if w_buf and w_buf.number then working_buffer_map[w_buf.number] = true end
     end
 
     for i = 1, display_pos - 1 do
@@ -352,13 +318,9 @@ end
 ---Get buffer at index
 ---@param idx number: Index of the buffer to retrieve
 ---@returns BafaBuffer|nil Buffer at index or nil if out of bounds
-function M.get_buffer_at_index(idx)
-  return state.working_buffers[idx]
-end
+function M.get_buffer_at_index(idx) return state.working_buffers[idx] end
 
-function M.is_working_buffers_empty()
-  return #state.working_buffers == 0
-end
+function M.is_working_buffers_empty() return #state.working_buffers == 0 end
 
 -- Rebuild display_order from working_buffers and original_buffers
 -- Keeps deleted buffers at their positions based on reference_order if provided, otherwise original_buffers
@@ -366,9 +328,7 @@ end
 local function rebuild_display_order(reference_order)
   local working_buffer_map = {}
   for _, buf in ipairs(state.working_buffers) do
-    if buf and buf.number then
-      working_buffer_map[buf.number] = true
-    end
+    if buf and buf.number then working_buffer_map[buf.number] = true end
   end
 
   -- Check if all buffers from original_buffers are in working_buffers
@@ -389,9 +349,7 @@ local function rebuild_display_order(reference_order)
     -- Create a map of buffer numbers to buffer objects from working_buffers
     local working_buffers_by_number = {}
     for _, w_buf in ipairs(state.working_buffers) do
-      if w_buf and w_buf.number then
-        working_buffers_by_number[w_buf.number] = w_buf
-      end
+      if w_buf and w_buf.number then working_buffers_by_number[w_buf.number] = w_buf end
     end
 
     local new_display_order = {}
@@ -407,9 +365,7 @@ local function rebuild_display_order(reference_order)
   -- Start with working buffers in their current order
   local new_display_order = {}
   for _, w_buf in ipairs(state.working_buffers) do
-    if w_buf and w_buf.number then
-      table.insert(new_display_order, w_buf)
-    end
+    if w_buf and w_buf.number then table.insert(new_display_order, w_buf) end
   end
 
   -- Add deleted buffers at their positions based on reference order
@@ -445,9 +401,7 @@ end
 
 -- Undo last change
 function M.undo()
-  if state.history_index <= 1 then
-    return false
-  end
+  if state.history_index <= 1 then return false end
 
   -- Get the history entry we're restoring to
   local previous_history = state.history[state.history_index - 1]
@@ -467,17 +421,13 @@ function M.undo()
     -- Build a map of working buffers by number (from restored working_buffers)
     local working_buffers_by_number = {}
     for _, w_buf in ipairs(state.working_buffers) do
-      if w_buf and w_buf.number then
-        working_buffers_by_number[w_buf.number] = w_buf
-      end
+      if w_buf and w_buf.number then working_buffers_by_number[w_buf.number] = w_buf end
     end
 
     -- Build a map of which buffers are now working
     local working_buffer_map = {}
     for _, buf in ipairs(state.working_buffers) do
-      if buf and buf.number then
-        working_buffer_map[buf.number] = true
-      end
+      if buf and buf.number then working_buffer_map[buf.number] = true end
     end
 
     -- Rebuild display_order preserving the order from current_display_order
@@ -490,9 +440,7 @@ function M.undo()
           table.insert(new_display_order, working_buffers_by_number[disp_buf.number])
         else
           -- Buffer is still deleted, keep it as is (but only if it's valid)
-          if vim.api.nvim_buf_is_valid(disp_buf.number) then
-            table.insert(new_display_order, disp_buf)
-          end
+          if vim.api.nvim_buf_is_valid(disp_buf.number) then table.insert(new_display_order, disp_buf) end
         end
       end
     end
@@ -512,9 +460,7 @@ end
 
 -- Redo last undone change
 function M.redo()
-  if state.history_index >= #state.history then
-    return false
-  end
+  if state.history_index >= #state.history then return false end
 
   -- Get the history entry we're restoring to
   local next_history = state.history[state.history_index + 1]
@@ -534,17 +480,13 @@ function M.redo()
     -- Build a map of working buffers by number (from restored working_buffers)
     local working_buffers_by_number = {}
     for _, w_buf in ipairs(state.working_buffers) do
-      if w_buf and w_buf.number then
-        working_buffers_by_number[w_buf.number] = w_buf
-      end
+      if w_buf and w_buf.number then working_buffers_by_number[w_buf.number] = w_buf end
     end
 
     -- Build a map of which buffers are now working
     local working_buffer_map = {}
     for _, buf in ipairs(state.working_buffers) do
-      if buf and buf.number then
-        working_buffer_map[buf.number] = true
-      end
+      if buf and buf.number then working_buffer_map[buf.number] = true end
     end
 
     -- Rebuild display_order preserving the order from current_display_order
@@ -557,9 +499,7 @@ function M.redo()
           table.insert(new_display_order, working_buffers_by_number[disp_buf.number])
         else
           -- Buffer is still deleted, keep it as is (but only if it's valid)
-          if vim.api.nvim_buf_is_valid(disp_buf.number) then
-            table.insert(new_display_order, disp_buf)
-          end
+          if vim.api.nvim_buf_is_valid(disp_buf.number) then table.insert(new_display_order, disp_buf) end
         end
       end
     end
@@ -600,9 +540,7 @@ function M.save_order()
       if buf.number and vim.api.nvim_buf_is_valid(buf.number) then
         -- Verify the buffer path matches (in case buffer number was reused)
         local success, buffer_name = pcall(vim.api.nvim_buf_get_name, buf.number)
-        if success and buffer_name == buf.path then
-          should_save = true
-        end
+        if success and buffer_name == buf.path then should_save = true end
       else
         -- Buffer number is invalid, check if any current buffer has this path
         local current_buffers = vim.api.nvim_list_bufs()
@@ -616,9 +554,7 @@ function M.save_order()
           end
         end
       end
-      if should_save then
-        table.insert(ordererd_buffers, buf.path)
-      end
+      if should_save then table.insert(ordererd_buffers, buf.path) end
     end
   end
   -- check if plugin kikao.nvim is installed
@@ -631,9 +567,7 @@ function M.save_order()
   kikao_api.set_value({ key = "plugins.bafa.buffers", value = ordererd_buffers })
   -- Use state.sorting directly if set, otherwise get persisted sorting
   local sorting_to_save = state.sorting
-  if sorting_to_save == nil then
-    sorting_to_save = M.get_persisted_sorting()
-  end
+  if sorting_to_save == nil then sorting_to_save = M.get_persisted_sorting() end
   kikao_api.set_value({ key = "plugins.bafa.sorting", value = sorting_to_save })
 end
 
@@ -664,23 +598,17 @@ local function update_buffers_for_sorting(new_sorting, current_buffers)
     -- Create a map of current state buffers by path to preserve which buffers are in the list
     local state_buffer_map = {}
     for _, buf in ipairs(state.working_buffers) do
-      if buf and buf.path then
-        state_buffer_map[buf.path] = true
-      end
+      if buf and buf.path then state_buffer_map[buf.path] = true end
     end
 
     -- Filter fresh buffers to only include those currently in state, then sort by last_used
     local buffers_to_sort = {}
     for _, buf in ipairs(current_buffers) do
-      if buf and buf.path and state_buffer_map[buf.path] then
-        table.insert(buffers_to_sort, buf)
-      end
+      if buf and buf.path and state_buffer_map[buf.path] then table.insert(buffers_to_sort, buf) end
     end
 
     -- Sort by last_used (most recent first)
-    table.sort(buffers_to_sort, function(a, b)
-      return (a.last_used or 0) > (b.last_used or 0)
-    end)
+    table.sort(buffers_to_sort, function(a, b) return (a.last_used or 0) > (b.last_used or 0) end)
 
     -- Update state with sorted buffers
     state.original_buffers = copy_buffer_list(buffers_to_sort)
@@ -724,13 +652,9 @@ end
 ---@returns nil
 function M.save_cursor_line(cursor_line)
   -- Only save in manual mode
-  if M.get_persisted_sorting() ~= Types.BafaSorting.MANUAL then
-    return
-  end
+  if M.get_persisted_sorting() ~= Types.BafaSorting.MANUAL then return end
 
-  if cursor_line == nil or cursor_line < 1 then
-    return
-  end
+  if cursor_line == nil or cursor_line < 1 then return end
 
   local kikao_ok, kikao_api = pcall(require, "kikao.api")
   if not kikao_ok then
@@ -749,25 +673,17 @@ end
 ---@returns number|nil The cursor line (1-indexed) or nil if not set or out of bounds
 function M.get_persisted_cursor_line(max_line)
   -- Only restore in manual mode
-  if M.get_persisted_sorting() ~= Types.BafaSorting.MANUAL then
-    return nil
-  end
+  if M.get_persisted_sorting() ~= Types.BafaSorting.MANUAL then return nil end
 
   local kikao_ok, kikao_api = pcall(require, "kikao.api")
-  if not kikao_ok then
-    return nil
-  end
+  if not kikao_ok then return nil end
 
   local cursor_line = kikao_api.get_value({ key = "plugins.bafa.cursor_line" })
-  if cursor_line == nil or type(cursor_line) ~= "number" then
-    return nil
-  end
+  if cursor_line == nil or type(cursor_line) ~= "number" then return nil end
 
   -- Bounds checking
   if max_line ~= nil then
-    if cursor_line < 1 or cursor_line > max_line then
-      return nil
-    end
+    if cursor_line < 1 or cursor_line > max_line then return nil end
   end
 
   return cursor_line
@@ -775,18 +691,14 @@ end
 
 ---Get display order (includes both working and deleted buffers)
 ---@return BafaBuffer[]
-function M.get_display_order()
-  return state.display_order
-end
+function M.get_display_order() return state.display_order end
 
 ---Sync working_buffers order to match display_order (only for buffers that are in working_buffers)
 local function sync_working_buffers_from_display_order()
   -- Create a map of buffer numbers to their buffers in working_buffers
   local working_buffer_map = {}
   for _, buf in ipairs(state.working_buffers) do
-    if buf and buf.number then
-      working_buffer_map[buf.number] = buf
-    end
+    if buf and buf.number then working_buffer_map[buf.number] = buf end
   end
 
   -- Rebuild working_buffers in display_order order
@@ -806,9 +718,7 @@ end
 ---@return boolean True if moved
 function M.move_in_display_order(display_idx, direction)
   if direction == "up" then
-    if display_idx <= 1 or display_idx > #state.display_order then
-      return false
-    end
+    if display_idx <= 1 or display_idx > #state.display_order then return false end
     local temp = state.display_order[display_idx]
     state.display_order[display_idx] = state.display_order[display_idx - 1]
     state.display_order[display_idx - 1] = temp
@@ -817,9 +727,7 @@ function M.move_in_display_order(display_idx, direction)
     save_current_to_history()
     return true
   elseif direction == "down" then
-    if display_idx < 1 or display_idx >= #state.display_order then
-      return false
-    end
+    if display_idx < 1 or display_idx >= #state.display_order then return false end
     local temp = state.display_order[display_idx]
     state.display_order[display_idx] = state.display_order[display_idx + 1]
     state.display_order[display_idx + 1] = temp

@@ -1,10 +1,8 @@
-local Types = require("bafa.types")
 local Config = require("bafa.config")
+local Types = require("bafa.types")
 local M = {}
 
-local is_table = function(value)
-  return type(value) == "table"
-end
+local is_table = function(value) return type(value) == "table" end
 
 --- Format log message from multiple arguments
 --- @param ... any Multiple arguments to format into a log message
@@ -47,9 +45,7 @@ end
 --- @deprecated Use M.info instead
 --- @return nil
 M.log = function(...)
-  if not should_log(Types.BafaLoggerLogLevels.info) then
-    return
-  end
+  if not should_log(Types.BafaLoggerLogLevels.info) then return end
   logger_print(Types.BafaLoggerLogLevelNames.info, ...)
 end
 
@@ -57,9 +53,7 @@ end
 --- @param ... any Multiple arguments to log
 --- @return nil
 M.info = function(...)
-  if not should_log(Types.BafaLoggerLogLevels.info) then
-    return
-  end
+  if not should_log(Types.BafaLoggerLogLevels.info) then return end
   logger_print(Types.BafaLoggerLogLevelNames.info, ...)
 end
 
@@ -67,9 +61,7 @@ end
 --- @param ... any Multiple arguments to log
 --- @return nil
 M.warn = function(...)
-  if not should_log(Types.BafaLoggerLogLevels.warn) then
-    return
-  end
+  if not should_log(Types.BafaLoggerLogLevels.warn) then return end
   logger_print(Types.BafaLoggerLogLevelNames.warn, ...)
 end
 
@@ -77,9 +69,7 @@ end
 --- @param ... any Multiple arguments to log
 --- @return nil
 M.error = function(...)
-  if not should_log(Types.BafaLoggerLogLevels.error) then
-    return
-  end
+  if not should_log(Types.BafaLoggerLogLevels.error) then return end
   logger_print(Types.BafaLoggerLogLevelNames.error, ...)
 end
 
@@ -87,9 +77,7 @@ end
 --- @param ... any Multiple arguments to log
 --- @return nil
 M.debug = function(...)
-  if not should_log(Types.BafaLoggerLogLevels.debug) then
-    return
-  end
+  if not should_log(Types.BafaLoggerLogLevels.debug) then return end
   logger_print(Types.BafaLoggerLogLevelNames.debug, ...)
 end
 
@@ -98,15 +86,27 @@ end
 --- @param level BafaLoggerLogLevels The log level ("error", "warn", "info", "debug")
 M.notify = function(message, level)
   local conf = Config.get()
-  if conf.notify.provider == "print" then
+  level = level or Types.BafaLoggerLogLevelNames.info
+  if conf.notify.provider == Types.BafaConfigNotifyProvider.vim_notify then
+    vim.notify(
+      message,
+      Types.BafaLoggerLogLevels[level] or Types.BafaLoggerLogLevels.info,
+      { title = Config.plugin_name }
+    )
+    return
+  elseif conf.notify.provider == Types.BafaConfigNotifyProvider.print then
     print("[" .. Config.plugin_name .. "] [" .. level .. "] " .. message)
+  else
+    -- custom provider that implements the notify interface
+    pcall(
+      function()
+        conf.notify.provider(message, Types.BafaLoggerLogLevels[level] or Types.BafaLoggerLogLevels.info, {
+          title = Config.plugin_name,
+        })
+      end
+    )
     return
   end
-  vim.notify(
-    message,
-    Types.BafaLoggerLogLevels[level] or Types.BafaLoggerLogLevels.info,
-    { title = Config.plugin_name }
-  )
 end
 
 return M
