@@ -23,6 +23,78 @@ local DIAGNOSTICS_LABELS = { "Error", "Warn", "Info", "Hint" }
 local BAFA_SIGN_MODIFIED = "BafaModified"
 local BAFA_SIGN_DELETED = "BafaDeleted"
 
+---Calculate window position based on config
+---@param width number Window width
+---@param height number Window height
+---@param max_width number Maximum available width
+---@param max_height number Maximum available height
+---@return number row Row position
+---@return number col Column position
+local function calculate_window_position(width, height, max_width, max_height)
+  local bafa_config = Config.get()
+  local ui_config = bafa_config.ui or {}
+  local position_config = ui_config.position or {}
+
+  -- If custom row/col are provided, use them directly
+  if position_config.row ~= nil or position_config.col ~= nil then
+    local row = position_config.row
+    local col = position_config.col
+
+    -- If only one is provided, calculate the other using center
+    if row == nil then
+      row = math.floor((max_height - height) / 2) - 1
+    end
+    if col == nil then
+      col = math.floor((max_width - width) / 2)
+    end
+
+    return row, col
+  end
+
+  -- Otherwise, use the position preset
+  local preset = position_config.preset or Types.BafaConfigWindowPosition.center
+
+  local row, col
+
+  -- Calculate vertical position (row)
+  if
+    preset == Types.BafaConfigWindowPosition.top_center
+    or preset == Types.BafaConfigWindowPosition.top_left
+    or preset == Types.BafaConfigWindowPosition.top_right
+  then
+    row = 0
+  elseif
+    preset == Types.BafaConfigWindowPosition.bottom_center
+    or preset == Types.BafaConfigWindowPosition.bottom_left
+    or preset == Types.BafaConfigWindowPosition.bottom_right
+  then
+    row = max_height - height - 1
+  else
+    -- center, center-left, center-right
+    row = math.floor((max_height - height) / 2) - 1
+  end
+
+  -- Calculate horizontal position (col)
+  if
+    preset == Types.BafaConfigWindowPosition.top_left
+    or preset == Types.BafaConfigWindowPosition.bottom_left
+    or preset == Types.BafaConfigWindowPosition.center_left
+  then
+    col = 0
+  elseif
+    preset == Types.BafaConfigWindowPosition.top_right
+    or preset == Types.BafaConfigWindowPosition.bottom_right
+    or preset == Types.BafaConfigWindowPosition.center_right
+  then
+    col = max_width - width
+  else
+    -- center, top-center, bottom-center
+    col = math.floor((max_width - width) / 2)
+  end
+
+  return row, col
+end
+
 ---Get highlight group with fallback chain
 ---@param config_hl string|nil The configured highlight group
 ---@param fallbacks string[] Array of fallback highlight groups to try
@@ -562,34 +634,26 @@ local function refresh_ui()
   local current_width = vim.api.nvim_win_get_width(BAFA_WIN_ID)
   local current_height = vim.api.nvim_win_get_height(BAFA_WIN_ID)
 
-  local width_changed = false
-  local height_changed = false
-
   -- Always update width if it differs (accounting for sign column changes)
   if math.abs(needed_width - current_width) > 0 then
     vim.api.nvim_win_set_width(BAFA_WIN_ID, needed_width)
-    width_changed = true
   end
 
   if needed_height ~= current_height then
     vim.api.nvim_win_set_height(BAFA_WIN_ID, needed_height)
-    height_changed = true
   end
 
-  -- Re-center the window after size changes (only if relative is "editor")
-  -- Always re-center if dimensions changed to ensure proper positioning
-  if width_changed or height_changed then
-    local final_width = needed_width
-    local final_height = needed_height
-    local row = math.floor((max_height - final_height) / 2) - 1
-    local col = math.floor((max_width - final_width) / 2)
+  -- Always recalculate window position to ensure it's correct according to config
+  -- This handles cases where content changes, editor dimensions change, or config changes
+  local final_width = vim.api.nvim_win_get_width(BAFA_WIN_ID)
+  local final_height = vim.api.nvim_win_get_height(BAFA_WIN_ID)
+  local row, col = calculate_window_position(final_width, final_height, max_width, max_height)
 
-    vim.api.nvim_win_set_config(BAFA_WIN_ID, {
-      relative = "editor",
-      row = row,
-      col = col,
-    })
-  end
+  vim.api.nvim_win_set_config(BAFA_WIN_ID, {
+    relative = "editor",
+    row = row,
+    col = col,
+  })
 end
 
 local function create_window()
@@ -612,6 +676,10 @@ local function create_window()
     math.min(max_width, buffer_longest_name_width + 4 + number_column_width + sign_column_width + diagnostics_width)
   local height = math.min(max_height, buffer_lines + 2)
 
+  local max_width_editor = vim.o.columns
+  local max_height_editor = vim.o.lines
+  local row, col = calculate_window_position(width, height, max_width_editor, max_height_editor)
+
   BAFA_WIN_ID = vim.api.nvim_open_win(bufnr, true, {
     title = bafa_config.title,
     ---@type BafaConfigTitlesPos
@@ -621,8 +689,8 @@ local function create_window()
     border = bafa_config.border,
     width = width,
     height = height,
-    row = math.floor(((vim.o.lines - height) / 2) - 1),
-    col = math.floor((vim.o.columns - width) / 2),
+    row = row,
+    col = col,
     ---@type BafaConfigStyle
     style = bafa_config.style,
   })
@@ -675,16 +743,6 @@ function M.select_menu_item()
   -- If the selected buffer is marked for deletion, restore it first
   if is_buffer_marked_for_deletion(selected_buffer) then
     State.add_buffer(selected_buffer)
-    refresh_ui()
-    -- After restoring, the buffer is now in working_buffers, so we can proceed
-    -- But we need to get the updated position since the list changed
-    local working_buffers = State.get_working_buffers()
-    for idx, buf in ipairs(working_buffers) do
-      if buf and buf.number == selected_buffer.number then
-        selected_line_number = idx
-        break
-      end
-    end
   end
 
   -- Commit changes before selecting

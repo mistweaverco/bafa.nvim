@@ -29,7 +29,6 @@ M.config_defaults = {
   line_numbers = false,
   log_level = Types.BafaLoggerLogLevelNames.error,
   hl = {
-    modified = "DiffChange", -- Highlight group for modified buffer text (fallback: GitSignsChange, WarningMsg)
     sign = {
       modified = "GitSignsChange", -- Highlight group for modified buffer signs (fallback: DiffChange)
       deleted = "GitSignsDelete", -- Highlight group for deleted buffer signs (fallback: DiffDelete)
@@ -49,6 +48,13 @@ M.config_defaults = {
       changes = "┃", -- Sign character for modified/deleted buffers (gitsigns-like UX)
     },
   },
+  ui = {
+    position = {
+      preset = Types.BafaConfigWindowPosition.center,
+      row = nil, -- Custom row position (overrides preset if set)
+      col = nil, -- Custom column position (overrides preset if set)
+    },
+  },
 }
 
 ---@type BafaDefaultConfig
@@ -57,8 +63,9 @@ M.user_config = M.config_defaults
 ---Setup configuration
 ---@param config BafaUserConfig|nil
 M.setup = function(config)
-  local normalized_config = M.get_normalized_config(config or {})
-  M.user_config = vim.tbl_deep_extend("force", M.config_defaults, normalized_config)
+  -- Merge user config with defaults using deep extend
+  -- This properly handles nested tables like ui.position
+  M.user_config = vim.tbl_deep_extend("force", M.config_defaults, config or {})
 end
 
 ---Set configuration options

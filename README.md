@@ -77,7 +77,9 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 ```lua
 {
   'mistweaverco/bafa.nvim',
-  version = 'v1.4.1',
+  version = 'v1.5.0',
+
+  ---@type BafaUserConfig
   opts = {}
 },
 ```
@@ -93,7 +95,7 @@ See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
 ```lua
 use {
   'mistweaverco/bafa.nvim',
-  tag = 'v1.4.1',
+  tag = 'v1.5.0',
   config = function()
     require('bafa').setup({})
   end
@@ -109,7 +111,7 @@ use {
 ```lua
 vim.pack.add({
   src = 'https://github.com/mistweaverco/bafa.nvim.git',
-  version = 'v1.4.1',
+  version = 'v1.5.0',
 })
 require('bafa').setup({})
 ```
@@ -122,6 +124,7 @@ require('bafa').setup({})
 ### Configuration options
 
 ```lua
+---@type BafaUserConfig
 return {
     title = "Bafa",
     title_pos = "center",
@@ -141,14 +144,25 @@ return {
         },
     },
     hl = {
-        modified = "DiffChange", -- Highlight group for modified buffer text (fallback: GitSignsChange, WarningMsg)
         sign = {
-            modified = "GitSignsChange", -- Highlight group for modified buffer signs (fallback: DiffChange)
-            deleted = "GitSignsDelete", -- Highlight group for deleted buffer signs (fallback: DiffDelete)
+            modified = "DiffChange", -- Highlight group for modified buffer signs
+            deleted = "DiffDelete", -- Highlight group for deleted buffer signs
         },
     },
     notify = {
         provider = "notify", -- "notify" or "print"
+    },
+    ui = {
+        position = {
+            -- Window position preset:
+            "center", "top-center", "bottom-center", "top-left", "top-right",
+            "bottom-left", "bottom-right", "center-left", "center-right"
+            preset = "center",
+            -- Custom row position (overrides preset if set)
+            row = nil,
+            -- Custom column position (overrides preset if set)
+            col = nil,
+        },
     },
 }
 
