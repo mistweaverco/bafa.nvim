@@ -268,7 +268,7 @@ to quickly select that buffer.
 Press `Escape` or `g` to exit jump-label mode without
 selecting a buffer.
 
-You can also delete buffers while in jump-label mode
+You can also delete buffers while in via jump-label mode
 by pressing `gd` to enable jump-label delete mode.
 
 Press `Escape` or `g` to exit jump-label delete mode.
