@@ -449,46 +449,63 @@ function M.undo()
     return false
   end
 
-  -- Save current display_order to preserve its order
-  local current_display_order = copy_buffer_list(state.display_order)
+  -- Get the history entry we're restoring to
+  local previous_history = state.history[state.history_index - 1]
 
-  state.history_index = state.history_index - 1
-  state.working_buffers = copy_buffer_list(state.history[state.history_index])
+  -- Check if this is a deletion/add operation (count changed) or move/sort (count same)
+  local current_count = #state.working_buffers
+  local previous_count = #previous_history
+  local is_deletion_or_add = (current_count ~= previous_count)
 
-  -- Build a map of working buffers by number (from restored working_buffers)
-  local working_buffers_by_number = {}
-  for _, w_buf in ipairs(state.working_buffers) do
-    if w_buf and w_buf.number then
-      working_buffers_by_number[w_buf.number] = w_buf
+  if is_deletion_or_add then
+    -- For deletion/add operations: preserve display_order positions, just update which buffers are working
+    local current_display_order = copy_buffer_list(state.display_order)
+
+    state.history_index = state.history_index - 1
+    state.working_buffers = copy_buffer_list(previous_history)
+
+    -- Build a map of working buffers by number (from restored working_buffers)
+    local working_buffers_by_number = {}
+    for _, w_buf in ipairs(state.working_buffers) do
+      if w_buf and w_buf.number then
+        working_buffers_by_number[w_buf.number] = w_buf
+      end
     end
-  end
 
-  -- Build a map of which buffers are now working
-  local working_buffer_map = {}
-  for _, buf in ipairs(state.working_buffers) do
-    if buf and buf.number then
-      working_buffer_map[buf.number] = true
+    -- Build a map of which buffers are now working
+    local working_buffer_map = {}
+    for _, buf in ipairs(state.working_buffers) do
+      if buf and buf.number then
+        working_buffer_map[buf.number] = true
+      end
     end
-  end
 
-  -- Rebuild display_order preserving the order from current_display_order
-  -- but using buffer objects from working_buffers for buffers that are now working
-  local new_display_order = {}
-  for _, disp_buf in ipairs(current_display_order) do
-    if disp_buf and disp_buf.number then
-      if working_buffer_map[disp_buf.number] then
-        -- Buffer is now working, use the object from working_buffers
-        table.insert(new_display_order, working_buffers_by_number[disp_buf.number])
-      else
-        -- Buffer is still deleted, keep it as is (but only if it's valid)
-        if vim.api.nvim_buf_is_valid(disp_buf.number) then
-          table.insert(new_display_order, disp_buf)
+    -- Rebuild display_order preserving the order from current_display_order
+    -- but using buffer objects from working_buffers for buffers that are now working
+    local new_display_order = {}
+    for _, disp_buf in ipairs(current_display_order) do
+      if disp_buf and disp_buf.number then
+        if working_buffer_map[disp_buf.number] then
+          -- Buffer is now working, use the object from working_buffers
+          table.insert(new_display_order, working_buffers_by_number[disp_buf.number])
+        else
+          -- Buffer is still deleted, keep it as is (but only if it's valid)
+          if vim.api.nvim_buf_is_valid(disp_buf.number) then
+            table.insert(new_display_order, disp_buf)
+          end
         end
       end
     end
-  end
 
-  state.display_order = new_display_order
+    state.display_order = new_display_order
+  else
+    -- For move/sort operations: restore order from history entry
+    state.history_index = state.history_index - 1
+    state.working_buffers = copy_buffer_list(previous_history)
+
+    -- Use rebuild_display_order with the history entry as reference to restore the order
+    rebuild_display_order(previous_history)
+  end
 
   return true
 end
@@ -499,46 +516,63 @@ function M.redo()
     return false
   end
 
-  -- Save current display_order to preserve its order
-  local current_display_order = copy_buffer_list(state.display_order)
+  -- Get the history entry we're restoring to
+  local next_history = state.history[state.history_index + 1]
 
-  state.history_index = state.history_index + 1
-  state.working_buffers = copy_buffer_list(state.history[state.history_index])
+  -- Check if this is a deletion/add operation (count changed) or move/sort (count same)
+  local current_count = #state.working_buffers
+  local next_count = #next_history
+  local is_deletion_or_add = (current_count ~= next_count)
 
-  -- Build a map of working buffers by number (from restored working_buffers)
-  local working_buffers_by_number = {}
-  for _, w_buf in ipairs(state.working_buffers) do
-    if w_buf and w_buf.number then
-      working_buffers_by_number[w_buf.number] = w_buf
+  if is_deletion_or_add then
+    -- For deletion/add operations: preserve display_order positions, just update which buffers are working
+    local current_display_order = copy_buffer_list(state.display_order)
+
+    state.history_index = state.history_index + 1
+    state.working_buffers = copy_buffer_list(next_history)
+
+    -- Build a map of working buffers by number (from restored working_buffers)
+    local working_buffers_by_number = {}
+    for _, w_buf in ipairs(state.working_buffers) do
+      if w_buf and w_buf.number then
+        working_buffers_by_number[w_buf.number] = w_buf
+      end
     end
-  end
 
-  -- Build a map of which buffers are now working
-  local working_buffer_map = {}
-  for _, buf in ipairs(state.working_buffers) do
-    if buf and buf.number then
-      working_buffer_map[buf.number] = true
+    -- Build a map of which buffers are now working
+    local working_buffer_map = {}
+    for _, buf in ipairs(state.working_buffers) do
+      if buf and buf.number then
+        working_buffer_map[buf.number] = true
+      end
     end
-  end
 
-  -- Rebuild display_order preserving the order from current_display_order
-  -- but using buffer objects from working_buffers for buffers that are now working
-  local new_display_order = {}
-  for _, disp_buf in ipairs(current_display_order) do
-    if disp_buf and disp_buf.number then
-      if working_buffer_map[disp_buf.number] then
-        -- Buffer is now working, use the object from working_buffers
-        table.insert(new_display_order, working_buffers_by_number[disp_buf.number])
-      else
-        -- Buffer is still deleted, keep it as is (but only if it's valid)
-        if vim.api.nvim_buf_is_valid(disp_buf.number) then
-          table.insert(new_display_order, disp_buf)
+    -- Rebuild display_order preserving the order from current_display_order
+    -- but using buffer objects from working_buffers for buffers that are now working
+    local new_display_order = {}
+    for _, disp_buf in ipairs(current_display_order) do
+      if disp_buf and disp_buf.number then
+        if working_buffer_map[disp_buf.number] then
+          -- Buffer is now working, use the object from working_buffers
+          table.insert(new_display_order, working_buffers_by_number[disp_buf.number])
+        else
+          -- Buffer is still deleted, keep it as is (but only if it's valid)
+          if vim.api.nvim_buf_is_valid(disp_buf.number) then
+            table.insert(new_display_order, disp_buf)
+          end
         end
       end
     end
-  end
 
-  state.display_order = new_display_order
+    state.display_order = new_display_order
+  else
+    -- For move/sort operations: restore order from history entry
+    state.history_index = state.history_index + 1
+    state.working_buffers = copy_buffer_list(next_history)
+
+    -- Use rebuild_display_order with the history entry as reference to restore the order
+    rebuild_display_order(next_history)
+  end
 
   return true
 end
