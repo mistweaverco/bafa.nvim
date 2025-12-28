@@ -57,6 +57,19 @@ M.BafaConfigNotifyProvider = {
   print = "print",
 }
 
+---@enum BafaConfigWindowPosition
+M.BafaConfigWindowPosition = {
+  center = "center",
+  top_center = "top-center",
+  bottom_center = "bottom-center",
+  top_left = "top-left",
+  top_right = "top-right",
+  bottom_left = "bottom-left",
+  bottom_right = "bottom-right",
+  center_left = "center-left",
+  center_right = "center-right",
+}
+
 ---@class BafaPersistedData
 ---@field buffers BafaBuffer[]
 ---@field sorting BafaSorting
@@ -82,8 +95,15 @@ M.BafaConfigNotifyProvider = {
 ---@field deleted string Highlight group for deleted buffer signs
 
 ---@class BafaConfigHl
----@field modified string Highlight group for modified buffer text
 ---@field sign BafaConfigHlSign Highlight groups for signs
+
+---@class BafaConfigUiPosition
+---@field preset BafaConfigWindowPosition|nil Window position preset
+---@field row number|nil Custom row position (overrides preset if set)
+---@field col number|nil Custom column position (overrides preset if set)
+
+---@class BafaConfigUi
+---@field position BafaConfigUiPosition Window position configuration
 
 ---@class BafaDefaultConfig
 ---@field title string
@@ -96,14 +116,22 @@ M.BafaConfigNotifyProvider = {
 ---@field notify BafaConfigNotify
 ---@field icons BafaConfigIcons
 ---@field hl BafaConfigHl Highlight groups configuration
+---@field ui BafaConfigUi UI configuration
 
 ---@class BafaUserConfigHlSign
 ---@field modified string|nil
 ---@field deleted string|nil
 
 ---@class BafaUserConfigHl
----@field modified string|nil
 ---@field sign BafaUserConfigHlSign|nil
+
+---@class BafaUserConfigUiPosition
+---@field preset BafaConfigWindowPosition|nil Window position preset
+---@field row number|nil Custom row position (overrides preset if set)
+---@field col number|nil Custom column position (overrides preset if set)
+
+---@class BafaUserConfigUi
+---@field position BafaUserConfigUiPosition|nil Window position configuration
 
 ---@class BafaUserConfig
 ---@field title string|nil
@@ -116,6 +144,7 @@ M.BafaConfigNotifyProvider = {
 ---@field notify BafaConfigNotify|nil
 ---@field icons BafaConfigIcons|nil
 ---@field hl BafaUserConfigHl|nil
+---@field ui BafaUserConfigUi|nil
 
 ---@class BafaState
 ---@field sorting BafaSorting|nil
