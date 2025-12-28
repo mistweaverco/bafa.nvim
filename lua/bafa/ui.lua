@@ -1074,6 +1074,10 @@ function M.commit_changes(on_complete)
 
   local working_buffers = State.get_working_buffers()
 
+  -- Save the current order BEFORE deleting buffers (so we can preserve it after commit)
+  -- This ensures that when we reinitialize state, it uses the correct order
+  State.save_order()
+
   -- Delete buffers that were removed from the list
   local original_buffers = State.get_original_buffers()
   -- Use paths for comparison since buffer numbers can change
@@ -1240,8 +1244,8 @@ function M.commit_changes(on_complete)
         end
         State.init(filtered_buffers)
 
-        -- Save the order AFTER state is refreshed with the correct buffers
-        -- This ensures deleted buffers are not in the persisted order
+        -- Order was already saved before deleting buffers, but save again to ensure consistency
+        -- (State.init may have reordered based on persisted order, which should now match)
         State.save_order()
 
         if on_complete then
@@ -1341,8 +1345,8 @@ function M.commit_changes(on_complete)
     end
     State.init(filtered_buffers)
 
-    -- Save the order AFTER state is refreshed with the correct buffers
-    -- This ensures deleted buffers are not in the persisted order
+    -- Order was already saved before deleting buffers, but save again to ensure consistency
+    -- (State.init may have reordered based on persisted order, which should now match)
     State.save_order()
 
     if on_complete then
@@ -1415,10 +1419,14 @@ function M.toggle_sorting(sorting)
   local current_sorting_mode = State.get_persisted_sorting()
   if current_sorting_mode == Types.BafaSorting.AUTO and (sorting == nil or sorting == Types.BafaSorting.MANUAL) then
     Logger.notify("Sorting set to: " .. Types.BafaSorting.MANUAL, Logger.INFO)
-    State.set_persisted_sorting(Types.BafaSorting.MANUAL)
+    -- When switching to MANUAL, use current buffers from state to preserve current order
+    -- No need to pass buffers since we're just saving the current order
+    State.set_persisted_sorting(Types.BafaSorting.MANUAL, nil)
   elseif current_sorting_mode == Types.BafaSorting.MANUAL and (sorting == nil or sorting == Types.BafaSorting.AUTO) then
     Logger.notify("Sorting set to: " .. Types.BafaSorting.AUTO, Logger.INFO)
-    State.set_persisted_sorting(Types.BafaSorting.AUTO)
+    -- When switching to AUTO, get fresh buffers with updated last_used times to sort them
+    local current_buffers = BufferUtils.get_buffers_as_table()
+    State.set_persisted_sorting(Types.BafaSorting.AUTO, current_buffers)
   else
     Logger.debug("Sorting mode unchanged: " .. current_sorting_mode)
   end
