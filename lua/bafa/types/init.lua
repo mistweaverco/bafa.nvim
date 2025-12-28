@@ -27,15 +27,15 @@ M.BafaLoggerLogLevels = {
   off = vim.log.levels.OFF,
 }
 
----@enum BafaConfigTitlesPos
-M.BafaConfigTitlesPos = {
+---@enum BafaConfigUiTitlePos
+M.BafaConfigUiTitlePos = {
   center = "center",
   left = "left",
   right = "right",
 }
 
----@enum BafaConfigBorder
-M.BafaConfigBorder = {
+---@enum BafaConfigUiBorder
+M.BafaConfigUiBorder = {
   none = "none",
   single = "single",
   double = "double",
@@ -44,8 +44,8 @@ M.BafaConfigBorder = {
   shadow = "shadow",
 }
 
----@enum BafaConfigStyle
-M.BafaConfigStyle = {
+---@enum BafaConfigUiStyle
+M.BafaConfigUiStyle = {
   minimal = "minimal",
   classic = "classic",
   minimal_inset = "minimal_inset",
@@ -53,7 +53,7 @@ M.BafaConfigStyle = {
 
 ---@enum BafaConfigNotifyProvider
 M.BafaConfigNotifyProvider = {
-  notify = "notify",
+  vim_notify = "vim.notify",
   print = "print",
 }
 
@@ -75,7 +75,7 @@ M.BafaConfigWindowPosition = {
 ---@field sorting BafaSorting
 
 ---@class BafaConfigNotify
----@field provider BafaConfigNotifyProvider
+---@field provider BafaConfigNotifyProvider|string Notification provider
 
 ---@class BafaConfigIconsDiagnostics
 ---@field Error string
@@ -97,25 +97,33 @@ M.BafaConfigWindowPosition = {
 ---@class BafaConfigHl
 ---@field sign BafaConfigHlSign Highlight groups for signs
 
+---@class BafaConfigUiJumpLabels
+---@field always_visible boolean Always show jump-labels for quick navigation
+---@field keys string[] Keys to use for jump-labels in order of preference
+
 ---@class BafaConfigUiPosition
 ---@field preset BafaConfigWindowPosition|nil Window position preset
----@field row number|nil Custom row position (overrides preset if set)
----@field col number|nil Custom column position (overrides preset if set)
+---@field row number|function|nil Custom row position (overrides preset if set), also supports a function that returns a number
+---@field col number|function|nil Custom column position (overrides preset if set), also supports a function that returns a number
+
+---@class BafaConfigUiTitle
+---@field text string Title text
+---@field pos BafaConfigUiTitlePos Title position
 
 ---@class BafaConfigUi
+---@field jump_labels BafaConfigUiJumpLabels Jump-labels configuration
+---@field diagnostics boolean Show diagnostics in the UI
+---@field line_numbers boolean Show line numbers in the UI
+---@field title BafaConfigUiTitle Title configuration
+---@field border BafaConfigUiBorder Floating window border configuration
+---@field style BafaConfigUiStyle Floating window style configuration
 ---@field position BafaConfigUiPosition Window position configuration
+---@field icons BafaConfigIcons Icons configuration
+---@field hl BafaConfigHl Highlight groups configuration
 
 ---@class BafaDefaultConfig
----@field title string
----@field title_pos BafaConfigTitlesPos
----@field border BafaConfigBorder
----@field style BafaConfigStyle
----@field diagnostics boolean
----@field line_numbers boolean
 ---@field log_level BafaLoggerLogLevelNames
 ---@field notify BafaConfigNotify
----@field icons BafaConfigIcons
----@field hl BafaConfigHl Highlight groups configuration
 ---@field ui BafaConfigUi UI configuration
 
 ---@class BafaUserConfigHlSign
@@ -130,20 +138,36 @@ M.BafaConfigWindowPosition = {
 ---@field row number|nil Custom row position (overrides preset if set)
 ---@field col number|nil Custom column position (overrides preset if set)
 
+---@class BafaUserConfigUiJumpLabels
+---@field always_visible boolean|nil Always show jump-labels for quick navigation
+---@field keys string[]|nil Keys to use for jump-labels in order of preference
+
+---@class BafaUserConfigUiTitle
+---@field text string|nil Title text
+---@field pos BafaConfigUiTitlePos|nil Title position
+
 ---@class BafaUserConfigUi
+---@field jump_labels BafaUserConfigUiJumpLabels|nil Jump-labels configuration
+---@field diagnostics boolean|nil Show diagnostics in the UI
+---@field line_numbers boolean|nil Show line numbers in the UI
+---@field title BafaUserConfigUiTitle|nil Title configuration
+---@field border BafaConfigUiBorder|nil Floating window border configuration
+---@field style BafaConfigUiStyle|nil Floating window style configuration
 ---@field position BafaUserConfigUiPosition|nil Window position configuration
+---@field icons BafaConfigIcons|nil Icons configuration
+---@field hl BafaUserConfigHl|nil Highlight groups configuration
 
 ---@class BafaUserConfig
----@field title string|nil
----@field title_pos BafaConfigTitlesPos|nil
----@field border BafaConfigBorder|nil
----@field style BafaConfigStyle|nil
----@field diagnostics boolean|nil
----@field line_numbers boolean|nil
+---@field title string|nil @deprecated Use ui.title.text instead
+---@field title_pos BafaConfigUiTitlePos|nil @deprecated Use ui.title.pos instead
+---@field border BafaConfigUiBorder|nil @deprecated Use ui.border instead
+---@field style BafaConfigUiStyle|nil @deprecated Use ui.style instead
+---@field diagnostics boolean|nil @deprecated Use ui.diagnostics instead
+---@field line_numbers boolean|nil @deprecated Use ui.line_numbers instead
 ---@field log_level BafaLoggerLogLevelNames|nil
 ---@field notify BafaConfigNotify|nil
----@field icons BafaConfigIcons|nil
----@field hl BafaUserConfigHl|nil
+---@field icons BafaConfigIcons|nil @deprecated Use ui.icons instead
+---@field hl BafaUserConfigHl|nil @deprecated Use ui.hl instead
 ---@field ui BafaUserConfigUi|nil
 
 ---@class BafaState
