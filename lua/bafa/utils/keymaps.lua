@@ -1,3 +1,7 @@
+local Keys = require("bafa.utils.keys")
+local Modes = require("bafa.utils.modes")
+local TableUtils = require("bafa.utils.table")
+
 local M = {}
 
 -- Shared options to ensure we override everything
@@ -8,7 +12,7 @@ local BASE_KEYMAP_OPTS = {
   remap = false,
 }
 
-function M.defaults(bufnr)
+function M.defaults()
   local user_config = require("bafa.config").get()
   local ui = require("bafa.ui")
 
@@ -29,6 +33,21 @@ function M.defaults(bufnr)
     vim.keymap.set("n", key, "<Nop>", get_keymap_opts("Unset jump label keymap"))
   end
 
+  -- Commit changes without closing (localleader + w)
+  vim.keymap.set(
+    "n",
+    Keys.localleader .. "w",
+    function() ui.commit_changes_and_refresh() end,
+    get_keymap_opts("Commit changes and refresh UI")
+  )
+  -- Commit changes and close (localleader + W)
+  vim.keymap.set(
+    "n",
+    Keys.localleader .. "W",
+    function() ui.commit_changes_and_close() end,
+    get_keymap_opts("Commit changes and close UI")
+  )
+
   -- Cancel action (ESC and q)
   vim.keymap.set(
     "n",
@@ -43,57 +62,43 @@ function M.defaults(bufnr)
     get_keymap_opts("Cancel changes and close buffer menu")
   )
   -- Select buffer (commits changes first)
-  vim.api.nvim_buf_set_keymap(bufnr, "n", "<CR>", "<Cmd>lua require('bafa.ui').select_menu_item()<CR>", {})
-  -- Delete buffer
-  vim.api.nvim_buf_set_keymap(bufnr, "n", "D", "<Cmd>lua require('bafa.ui').delete_menu_item()<CR>", {})
-  -- Move buffer up (swap with previous)
-  vim.api.nvim_buf_set_keymap(bufnr, "n", "K", "<Cmd>lua require('bafa.ui').move_buffer_up()<CR>", { silent = true })
-  -- Move buffer down (swap with next)
-  vim.api.nvim_buf_set_keymap(bufnr, "n", "J", "<Cmd>lua require('bafa.ui').move_buffer_down()<CR>", { silent = true })
-  -- Toggle sorting
-  vim.api.nvim_buf_set_keymap(bufnr, "n", "o", "<Cmd>lua require('bafa.ui').toggle_sorting()<CR>", { silent = true })
-  -- Undo
-  vim.api.nvim_buf_set_keymap(bufnr, "n", "u", "<Cmd>lua require('bafa.ui').undo()<CR>", { silent = true })
-  -- Redo
-  vim.api.nvim_buf_set_keymap(bufnr, "n", "<C-r>", "<Cmd>lua require('bafa.ui').redo()<CR>", { silent = true })
+  vim.keymap.set("n", "<CR>", function() ui.select_menu_item() end, get_keymap_opts("Select highlighted buffer"))
 
   -- Force normal visual mode to be linewise
-  vim.api.nvim_buf_set_keymap(bufnr, "n", "v", "V", { silent = true })
-
-  -- Visual mode: delete selected buffers (d and D work in visual mode)
-  vim.api.nvim_buf_set_keymap(bufnr, "v", "d", "<Cmd>lua require('bafa.ui').delete_menu_item()<CR>", {})
-  vim.api.nvim_buf_set_keymap(bufnr, "v", "D", "<Cmd>lua require('bafa.ui').delete_menu_item()<CR>", {})
-  -- Visual mode: move selected buffers up/down (K and J work in visual mode)
-  vim.api.nvim_buf_set_keymap(bufnr, "v", "K", "<Cmd>lua require('bafa.ui').move_buffer_up()<CR>", { silent = true })
-  vim.api.nvim_buf_set_keymap(bufnr, "v", "J", "<Cmd>lua require('bafa.ui').move_buffer_down()<CR>", { silent = true })
-
-  -- Commit changes without closing (localleader + w)
-  local localleader = vim.g.maplocalleader or ","
-  vim.api.nvim_buf_set_keymap(
-    bufnr,
-    "n",
-    localleader .. "w",
-    "<Cmd>lua require('bafa.ui').commit_changes_and_refresh()<CR>",
-    { silent = true, desc = "Commit changes and refresh UI" }
+  vim.keymap.set("n", "v", function()
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("V", true, false, true), "n", false)
+    ui.hide_jump_labels()
+  end, get_keymap_opts("Enter linewise visual mode", { nowait = true, noremap = false }))
+  -- Exit visual mode, when in visual mode and 'v' is pressed
+  vim.keymap.set(
+    "v",
+    "v",
+    function() vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false) end,
+    get_keymap_opts("Exit visual mode", { nowait = true, noremap = false })
   )
-  -- Commit changes and close (localleader + W)
-  vim.api.nvim_buf_set_keymap(
-    bufnr,
-    "n",
-    localleader .. "W",
-    "<Cmd>lua require('bafa.ui').commit_changes_and_close()<CR>",
-    { silent = true, desc = "Commit changes and close UI" }
-  )
+
+  -- Disable jump labels when visual mode is entered
+  vim.keymap.set("n", "V", function()
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("V", true, false, true), "n", false)
+    ui.hide_jump_labels()
+  end, get_keymap_opts("Disable jump labels on visual mode exit", { nowait = true, noremap = false }))
+
+  -- Delete buffer
+  vim.keymap.set({ "n", "v" }, "d", function() ui.delete_menu_item() end, get_keymap_opts("Delete selected buffer"))
+  -- Move buffer up (swap with previous)
+  vim.keymap.set({ "n", "v" }, "K", function() ui.move_buffer_up() end, get_keymap_opts("Move selected buffer up"))
+  -- Move buffer down (swap with next)
+  vim.keymap.set({ "n", "v" }, "J", function() ui.move_buffer_down() end, get_keymap_opts("Move selected buffer down"))
+  -- Toggle sorting
+  vim.keymap.set("n", "o", function() ui.toggle_sorting() end, get_keymap_opts("Toggle buffer sorting"))
+  -- Undo
+  vim.keymap.set("n", "u", function() ui.undo() end, get_keymap_opts("Undo last change"))
+  -- Redo
+  vim.keymap.set("n", "<C-r>", function() ui.redo() end, get_keymap_opts("Redo last undone change"))
 
   -- Jump labels: show labels when g is pressed
   -- This allows users to press 'g' then a label key to quickly jump to a buffer
-  vim.api.nvim_buf_set_keymap(
-    bufnr,
-    "n",
-    "g",
-    "<Cmd>lua require('bafa.ui').toggle_jump_labels()<CR>",
-    { silent = true, nowait = false, desc = "Show jump labels" }
-  )
+  vim.keymap.set("n", "g", function() ui.toggle_jump_labels() end, get_keymap_opts("Show jump labels"))
 
   -- Jump label keys (only active when labels are visible)
   -- Get jump label keys from config
@@ -115,47 +120,23 @@ function M.defaults(bufnr)
   -- Add uppercase variants
   local all_keys = {}
   for _, key in ipairs(unique_keys) do
-    table.insert(all_keys, key)
+    -- skip protected keys
+    if not TableUtils.contains(Keys.protected_jump_label_keys, key) then table.insert(all_keys, key) end
     local upper = key:upper()
-    if upper ~= key and not seen[upper] then
+    if not TableUtils.contains(Keys.protected_jump_label_keys, upper) and not seen[upper] then
       table.insert(all_keys, upper)
       seen[upper] = true
     end
   end
 
-  -- Map each jump label key to select_by_jump_label
-  -- The handler will check if labels are visible and pass through to normal behavior if not
-  -- Skip keys that have important default functionality to avoid conflicts
-  local keys_to_skip = {
-    q = true, -- reject changes and close UI
-    u = true, -- undo
-    D = true, -- delete buffer, normal mode, visual mode
-    dg = true, -- delete buffer jump label
-    o = true, -- toggle sorting
-    K = true, -- move buffer or selection of buffers up
-    J = true, -- move buffer or selection of buffers down
-  }
-
   for _, key in ipairs(all_keys) do
-    -- Skip keys that conflict with important functionality
-    if not keys_to_skip[key] then
-      vim.keymap.set(
-        "n",
-        key,
-        function() ui.select_by_jump_label(key) end,
-        get_keymap_opts("Select buffer by jump label")
-      )
-    end
+    vim.keymap.set(
+      "n",
+      key,
+      function() ui.select_by_jump_label(key) end,
+      get_keymap_opts("Select buffer by jump label " .. key, { nowait = false, noremap = false })
+    )
   end
-
-  -- this should only wait for one additional keypress after gD
-  -- so users can press 'gD' then a label key to delete that buffer
-  vim.keymap.set(
-    "n",
-    "dg",
-    function() ui.setup_delete_by_label() end,
-    get_keymap_opts("Show jump labels and wait for label to delete buffer")
-  )
 end
 
 return M

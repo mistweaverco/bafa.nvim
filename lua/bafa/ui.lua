@@ -2,11 +2,15 @@ local Autocmds = require("bafa.utils.autocmds")
 local BufferUtils = require("bafa.utils.buffers")
 local Config = require("bafa.config")
 local Keymaps = require("bafa.utils.keymaps")
+local PROTECTED_JUMP_LABEL_KEYS = require("bafa.utils.keys").protected_jump_label_keys
 local Logger = require("bafa.logger")
 local State = require("bafa.utils.state")
+local TableUtils = require("bafa.utils.table")
 local Types = require("bafa.types")
 local UiUtils = require("bafa.utils.ui")
 local _, Devicons = pcall(require, "nvim-web-devicons")
+
+local M = {}
 
 local BAFA_NS_ID = vim.api.nvim_create_namespace("bafa.nvim")
 
@@ -350,11 +354,11 @@ local function assign_jump_labels(buffers)
   local config = Config.get().ui.jump_labels
   local keys = config.keys
 
-  -- Remove duplicates from keys
+  -- Remove duplicates and and protected jump label keys
   local unique_keys = {}
   local seen = {}
   for _, key in ipairs(keys) do
-    if not seen[key] then
+    if not TableUtils.contains(PROTECTED_JUMP_LABEL_KEYS, key) and not seen[key] then
       table.insert(unique_keys, key)
       seen[key] = true
     end
@@ -778,8 +782,6 @@ local function create_window()
   }
 end
 
-local M = {}
-
 ---Exported version of jump_labels_visible
 M.jump_labels_visible = jump_labels_visible
 
@@ -997,6 +999,11 @@ end
 ---Deletes selected buffers in visual mode, or single buffer in normal mode
 ---@returns nil
 function M.delete_menu_item()
+  if jump_labels_visible and pending_jump_label_action ~= "delete" then
+    M.setup_delete_by_label()
+    return
+  end
+
   if BAFA_BUF_ID == nil or not vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then return end
 
   -- Get selection before exiting visual mode (if in visual mode)
@@ -1097,6 +1104,10 @@ end
 ---Supports visual selection: moves selected range as a block
 ---@returns nil
 function M.move_buffer_up()
+  if jump_labels_visible then
+    -- If jump labels are visible, ignore move commands
+    return
+  end
   if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then return end
   if BAFA_BUF_ID == nil or not vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then return end
 
@@ -1165,6 +1176,11 @@ end
 ---Supports visual selection: moves selected range as a block
 ---@returns nil
 function M.move_buffer_down()
+  if jump_labels_visible then
+    -- If jump labels are visible, ignore move commands
+    return
+  end
+
   if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then return end
   if BAFA_BUF_ID == nil or not vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then return end
 
@@ -1535,6 +1551,10 @@ end
 ---Undoes last change
 ---@returns nil
 function M.undo()
+  if jump_labels_visible then
+    -- skip undo while jump labels are visible
+    return
+  end
   if State.undo() then refresh_ui() end
 end
 
@@ -1542,6 +1562,10 @@ end
 --.Redoes last undone change
 --@returns nil
 function M.redo()
+  if jump_labels_visible then
+    -- skip redo while jump labels are visible
+    return
+  end
   if State.redo() then refresh_ui() end
 end
 

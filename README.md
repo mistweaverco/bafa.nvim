@@ -77,7 +77,7 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 ```lua
 {
   'mistweaverco/bafa.nvim',
-  version = 'v1.6.0',
+  version = 'v1.7.0',
 },
 ```
 
@@ -88,7 +88,7 @@ See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
 ```lua
 use {
   'mistweaverco/bafa.nvim',
-  tag = 'v1.6.0',
+  tag = 'v1.7.0',
 })
 ```
 
@@ -97,7 +97,7 @@ use {
 ```lua
 vim.pack.add({
   src = 'https://github.com/mistweaverco/bafa.nvim.git',
-  version = 'v1.6.0',
+  version = 'v1.7.0',
 })
 require('bafa').setup()
 ```
@@ -210,10 +210,10 @@ Press enter to select a buffer.
 
 ### Removing buffers
 
-Press `dd` or `D` to toggle "marked for deletion" on the current buffer.
+Press `d` to toggle "marked for deletion" on the current buffer.
 
 Use visual mode to select multiple buffers
-and then press `dd` or `D` to mark them all for deletion.
+and then press `d` to mark them all for deletion.
 
 > [!NOTE]
 > Because of the "commit" system,
@@ -265,12 +265,13 @@ jump-labels will be shown next to each buffer in the list.
 You can then press the corresponding key
 to quickly select that buffer.
 
-Press `Escape` to exit jump-label mode without selecting a buffer.
+Press `Escape` or `g` to exit jump-label mode without
+selecting a buffer.
 
 You can also delete buffers while in jump-label mode
-by pressing `dg` to enable jump-label delete mode.
+by pressing `gd` to enable jump-label delete mode.
 
-Press `Escape` to exit jump-label mode without deleting any buffers.
+Press `Escape` or `g` to exit jump-label delete mode.
 
 
 
