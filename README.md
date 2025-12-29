@@ -25,7 +25,7 @@ It allows you to quickly switch between buffers and delete them.
 
 <p></p>
 
-![demo](assets/demo.png)
+![demo](./web/static/assets/screenshots/default-ui.png)
 
 <p></p>
 
