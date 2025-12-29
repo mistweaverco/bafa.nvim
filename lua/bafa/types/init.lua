@@ -70,6 +70,9 @@ M.BafaConfigWindowPosition = {
   center_right = "center-right",
 }
 
+---@class BafaUiToggleOptions
+---@field with_jump_labels boolean|nil If true, shows jump labels when opening the menu
+
 ---@class BafaPersistedData
 ---@field buffers BafaBuffer[]
 ---@field sorting BafaSorting

@@ -77,7 +77,7 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 ```lua
 {
   'mistweaverco/bafa.nvim',
-  version = 'v1.7.1',
+  version = 'v1.8.0',
 },
 ```
 
@@ -88,7 +88,7 @@ See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
 ```lua
 use {
   'mistweaverco/bafa.nvim',
-  tag = 'v1.7.1',
+  tag = 'v1.8.0',
 })
 ```
 
@@ -97,7 +97,7 @@ use {
 ```lua
 vim.pack.add({
   src = 'https://github.com/mistweaverco/bafa.nvim.git',
-  version = 'v1.7.1',
+  version = 'v1.8.0',
 })
 require('bafa').setup()
 ```
@@ -203,6 +203,17 @@ return {
 Opens up a floating window with your buffers.
 
 The buffers are ordered by last usage time by default.
+
+Optionally accepts a table of "instructions"
+to pre-configure the UI state.
+
+```lua
+require('bafa.ui').toggle({
+    -- Show jump-labels when opening the UI
+    -- defaults to false|nil
+    with_jump_labels = true,
+})
+```
 
 ### Switching to a buffer
 
