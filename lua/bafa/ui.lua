@@ -1598,8 +1598,12 @@ function M.toggle_sorting(sorting)
 end
 
 ---Toggle bafa menu
+---@param opts BafaUiToggleOptions|nil Optional options
 ---@returns nil
-function M.toggle()
+function M.toggle(opts)
+  opts = opts or {}
+  if opts.with_jump_labels == true then jump_labels_visible = true end
+
   if BAFA_WIN_ID ~= nil and vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
     close_window()
     -- Restore cursor when closing the window
