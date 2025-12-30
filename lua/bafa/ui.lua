@@ -920,6 +920,7 @@ end
 ---@param pass_through boolean|nil If true, passes through the keypress to jump labels
 function M.cancel_action_handler(pass_through)
   if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then return end
+  -- If jump labels are visible, ignore cancel unless pass_through is true
   if jump_labels_visible then
     if pass_through then return end
     M.hide_jump_labels()
@@ -1001,6 +1002,7 @@ end
 ---Deletes selected buffers in visual mode, or single buffer in normal mode
 ---@returns nil
 function M.delete_menu_item()
+  -- If jump labels are visible and delete action is pending, use jump label deletion
   if jump_labels_visible and pending_jump_label_action ~= "delete" then
     M.setup_delete_by_label()
     return
@@ -1106,10 +1108,8 @@ end
 ---Supports visual selection: moves selected range as a block
 ---@returns nil
 function M.move_buffer_up()
-  if jump_labels_visible then
-    -- If jump labels are visible, ignore move commands
-    return
-  end
+  -- If jump labels are visible, ignore and fallthrough
+  if jump_labels_visible then return end
   if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then return end
   if BAFA_BUF_ID == nil or not vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then return end
 
@@ -1178,10 +1178,8 @@ end
 ---Supports visual selection: moves selected range as a block
 ---@returns nil
 function M.move_buffer_down()
-  if jump_labels_visible then
-    -- If jump labels are visible, ignore move commands
-    return
-  end
+  -- If jump labels are visible, ignore and fallthrough
+  if jump_labels_visible then return end
 
   if BAFA_WIN_ID == nil or not vim.api.nvim_win_is_valid(BAFA_WIN_ID) then return end
   if BAFA_BUF_ID == nil or not vim.api.nvim_buf_is_valid(BAFA_BUF_ID) then return end
@@ -1553,10 +1551,8 @@ end
 ---Undoes last change
 ---@returns nil
 function M.undo()
-  if jump_labels_visible then
-    -- skip undo while jump labels are visible
-    return
-  end
+  -- If jump labels are visible, ignore and fallthrough
+  if jump_labels_visible then return end
   if State.undo() then refresh_ui() end
 end
 
@@ -1564,10 +1560,8 @@ end
 --.Redoes last undone change
 --@returns nil
 function M.redo()
-  if jump_labels_visible then
-    -- skip redo while jump labels are visible
-    return
-  end
+  -- If jump labels are visible, ignore and fallthrough
+  if jump_labels_visible then return end
   if State.redo() then refresh_ui() end
 end
 
@@ -1580,6 +1574,8 @@ function M.refresh_ui() refresh_ui() end
 ---@param sorting BafaSorting|nil Optional sorting mode to set (manual/auto). If nil, toggles between modes.
 ---@returns nil
 function M.toggle_sorting(sorting)
+  -- If jump labels are visible, ignore and fallthrough
+  if jump_labels_visible then return end
   local current_sorting_mode = State.get_persisted_sorting()
   if current_sorting_mode == Types.BafaSorting.AUTO and (sorting == nil or sorting == Types.BafaSorting.MANUAL) then
     Logger.notify("Sorting set to: " .. Types.BafaSorting.MANUAL, Logger.INFO)

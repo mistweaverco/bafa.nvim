@@ -1,5 +1,4 @@
 local Keys = require("bafa.utils.keys")
-local Modes = require("bafa.utils.modes")
 local TableUtils = require("bafa.utils.table")
 
 local M = {}
@@ -32,6 +31,47 @@ function M.defaults()
   for _, key in ipairs(jump_lablels_keys) do
     vim.keymap.set("n", key, "<Nop>", get_keymap_opts("Unset jump label keymap"))
   end
+
+  -- Jump label keys (only active when labels are visible)
+  -- Get jump label keys from config
+  local bafa_config = require("bafa.config").get()
+  local ui_config = bafa_config.ui or {}
+  local jump_labels_config = ui_config.jump_labels or {}
+  local keys = jump_labels_config.keys or {}
+
+  -- Remove duplicates and add uppercase variants
+  local unique_keys = {}
+  local seen = {}
+  for _, key in ipairs(keys) do
+    if not seen[key] then
+      table.insert(unique_keys, key)
+      seen[key] = true
+    end
+  end
+
+  -- Add uppercase variants
+  local all_keys = {}
+  for _, key in ipairs(unique_keys) do
+    -- skip protected keys
+    if not TableUtils.contains(Keys.protected_jump_label_keys, key) then table.insert(all_keys, key) end
+    local upper = key:upper()
+    if not TableUtils.contains(Keys.protected_jump_label_keys, upper) and not seen[upper] then
+      table.insert(all_keys, upper)
+      seen[upper] = true
+    end
+  end
+
+  for _, key in ipairs(all_keys) do
+    vim.keymap.set(
+      "n",
+      key,
+      function() ui.select_by_jump_label(key) end,
+      get_keymap_opts("Select buffer by jump label " .. key, { nowait = false, noremap = false })
+    )
+  end
+
+  -- Setup menu action keymaps after jump label keys to override them
+  -- and if needed fallthrough to jump label handling in the respective functions
 
   -- Commit changes without closing (localleader + w)
   vim.keymap.set(
@@ -99,44 +139,6 @@ function M.defaults()
   -- Jump labels: show labels when g is pressed
   -- This allows users to press 'g' then a label key to quickly jump to a buffer
   vim.keymap.set("n", "g", function() ui.toggle_jump_labels() end, get_keymap_opts("Show jump labels"))
-
-  -- Jump label keys (only active when labels are visible)
-  -- Get jump label keys from config
-  local bafa_config = require("bafa.config").get()
-  local ui_config = bafa_config.ui or {}
-  local jump_labels_config = ui_config.jump_labels or {}
-  local keys = jump_labels_config.keys or {}
-
-  -- Remove duplicates and add uppercase variants
-  local unique_keys = {}
-  local seen = {}
-  for _, key in ipairs(keys) do
-    if not seen[key] then
-      table.insert(unique_keys, key)
-      seen[key] = true
-    end
-  end
-
-  -- Add uppercase variants
-  local all_keys = {}
-  for _, key in ipairs(unique_keys) do
-    -- skip protected keys
-    if not TableUtils.contains(Keys.protected_jump_label_keys, key) then table.insert(all_keys, key) end
-    local upper = key:upper()
-    if not TableUtils.contains(Keys.protected_jump_label_keys, upper) and not seen[upper] then
-      table.insert(all_keys, upper)
-      seen[upper] = true
-    end
-  end
-
-  for _, key in ipairs(all_keys) do
-    vim.keymap.set(
-      "n",
-      key,
-      function() ui.select_by_jump_label(key) end,
-      get_keymap_opts("Select buffer by jump label " .. key, { nowait = false, noremap = false })
-    )
-  end
 end
 
 return M

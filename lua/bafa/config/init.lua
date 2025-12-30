@@ -33,7 +33,7 @@ M.config_defaults = {
       keys = {
         "a", "s", "d", "f", "j", "k", "l", ";",
         "q", "w", "e", "r", "u", "i", "o", "p",
-        "z", "x", "c", "v", "n", "m", ",", ".",
+        "z", "x", "c", "n", "m", ",", ".",
       },
     },
     diagnostics = true,

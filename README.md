@@ -77,7 +77,7 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 ```lua
 {
   'mistweaverco/bafa.nvim',
-  version = 'v1.8.0',
+  version = 'v1.8.1',
 },
 ```
 
@@ -88,7 +88,7 @@ See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
 ```lua
 use {
   'mistweaverco/bafa.nvim',
-  tag = 'v1.8.0',
+  tag = 'v1.8.1',
 })
 ```
 
@@ -97,7 +97,7 @@ use {
 ```lua
 vim.pack.add({
   src = 'https://github.com/mistweaverco/bafa.nvim.git',
-  version = 'v1.8.0',
+  version = 'v1.8.1',
 })
 require('bafa').setup()
 ```
@@ -124,17 +124,19 @@ return {
       -- in order of preference
       -- Should be unique characters
       -- Duplicates will be ignored
+      -- require('bafa.utils.keys').protected_jump_label_keys
+      -- are also protected and will be ignored
       -- You can customize this to your keyboard layout
       -- will also use uppercase variants of these keys
       -- if the lower-case ones are exhausted
-      -- This should give us 48 unique keys on a QWERTY layout
+      -- This should give us roughly 46 unique keys (minus the protected ones)
       -- That should be enough for most use-cases
       -- but when we run out of keys, only the first buffers (in order, from top to bottom)
       -- will get jump-labels assigned
       keys = {
         "a", "s", "d", "f", "j", "k", "l", ";",
         "q", "w", "e", "r", "u", "i", "o", "p",
-        "z", "x", "c", "v", "n", "m", ",", ".",
+        "z", "x", "c", "n", "m", ",", ".",
       }
     },
     -- 🚨 Show diagnostics in the UI
