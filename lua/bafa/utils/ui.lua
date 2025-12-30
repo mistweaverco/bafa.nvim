@@ -35,6 +35,9 @@ end
 
 --- Enable cursorline for a window
 ---@param winid number Window ID
-function M.enable_cursorline(winid) vim.wo[winid].cursorline = true end
+function M.enable_cursorline(winid)
+  vim.wo[winid].cursorline = true
+  vim.wo[winid].cursorlineopt = "line"
+end
 
 return M
