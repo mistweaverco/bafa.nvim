@@ -11,6 +11,17 @@ M.contains = function(tbl, val)
   return false
 end
 
+---Reverse a table and return a new table
+---@param t table The table to reverse
+---@return table The reversed table
+M.reverse = function(t)
+  local reversed = {}
+  for i = #t, 1, -1 do
+    table.insert(reversed, t[i])
+  end
+  return reversed
+end
+
 ---Get the index of a value in a table
 ---@param tbl table The table to search
 ---@param val any The value to search for

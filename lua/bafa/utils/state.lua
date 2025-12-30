@@ -591,7 +591,6 @@ end
 local function update_buffers_for_sorting(new_sorting, current_buffers)
   local old_sorting = state.sorting
   local switching_to_auto = is_auto_sorting(new_sorting) and not is_auto_sorting(old_sorting)
-  local switching_to_manual = not is_auto_sorting(new_sorting) and is_auto_sorting(old_sorting)
 
   -- If switching to AUTO and we have current buffers, sort them by last_used
   if switching_to_auto and current_buffers then
@@ -630,11 +629,10 @@ end
 ---@param current_buffers BafaBuffer[]|nil Optional current buffers to reorder when switching sorting modes
 ---@returns nil
 function M.set_persisted_sorting(sorting, current_buffers)
-  local old_sorting = state.sorting
   state.sorting = get_valid_sorting(sorting)
 
   -- Update buffer order if switching modes and we have current buffers
-  local buffers_updated = update_buffers_for_sorting(state.sorting, current_buffers)
+  update_buffers_for_sorting(state.sorting, current_buffers)
 
   local kikao_ok, kikao_api = pcall(require, "kikao.api")
   if not kikao_ok then

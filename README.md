@@ -200,7 +200,7 @@ return {
 
 ## Usage
 
-### `require('bafa.ui').toggle()`
+### `require('bafa').toggle()`
 
 Opens up a floating window with your buffers.
 
@@ -210,7 +210,7 @@ Optionally accepts a table of "instructions"
 to pre-configure the UI state.
 
 ```lua
-require('bafa.ui').toggle({
+require('bafa').toggle({
     -- Show jump-labels when opening the UI
     -- defaults to false|nil
     with_jump_labels = true,

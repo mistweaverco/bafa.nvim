@@ -2,6 +2,20 @@ local text_utils = require("bafa.utils.text")
 
 local M = {}
 
+---Gets the window ID of the window displaying the buffer with the given name.
+---@param name string The name of the buffer to search for.
+---@return number|nil The window ID if found, otherwise nil.
+M.get_window_by_bufname = function(name)
+  local wins = vim.api.nvim_tabpage_list_wins(0)
+  for _, win in ipairs(wins) do
+    local buf = vim.api.nvim_win_get_buf(win)
+    local buf_path = vim.api.nvim_buf_get_name(buf)
+    local buf_name = vim.fn.fnamemodify(buf_path, ":t")
+    if buf_name == name then return win end
+  end
+  return nil
+end
+
 M.is_valid_buffer = function(buffer_number)
   if not vim.api.nvim_buf_is_valid(buffer_number) then return false end
   local success, buffer_name = pcall(vim.api.nvim_buf_get_name, buffer_number)
@@ -62,12 +76,21 @@ M.get_buffers_as_table = function()
               is_modified = is_modified,
             }
             table.insert(buffers, buffer)
-            table.sort(buffers, function(a, b) return a.last_used > b.last_used end)
           end
         end
       end
     end
   end
+  -- There is a condition where all buffers have the same last_used time,
+  -- in that case we sort by buffer number descending to keep a consistent order
+  table.sort(buffers, function(a, b)
+    if a.last_used == b.last_used then
+      return a.number > b.number
+    else
+      return a.last_used > b.last_used
+    end
+  end)
+
   return buffers
 end
 
