@@ -134,7 +134,7 @@ M.BafaDiagnosticType = {
 ---@field focus_alternate_buffer boolean If true, cursor defaults to second buffer (second most recently used) when opening menu
 
 ---@class BafaConfigUiRender
----@field custom_format_buffer_line fun(buffer_line: BafaUiBufferLine): string|nil Custom buffer line format function. If provided, this function will be called for each buffer line. Should return a string to display, or nil to use default formatting.
+---@field custom_format_buffer_line fun(buffer_line: BafaUiBufferLine): string|nil Custom buffer name format function. If provided, this function will be called for each buffer to format only the buffer name/content. The plugin handles padding, icons, and diagnostics. Should return a string for the buffer name/content, or nil to use default formatting.
 
 ---@class BafaConfigUi
 ---@field jump_labels BafaConfigUiJumpLabels Jump-labels configuration
@@ -179,7 +179,7 @@ M.BafaDiagnosticType = {
 ---@field focus_alternate_buffer boolean|nil If true, cursor defaults to second buffer (second most recently used) when opening menu
 
 ---@class BafaUserConfigUiRender
----@field custom_format_buffer_line fun(buffer_line: BafaUiBufferLine): string|nil|nil Custom buffer line format function. If provided, this function will be called for each buffer line. Should return a string to display, or nil to use default formatting.
+---@field custom_format_buffer_line fun(buffer_line: BafaUiBufferLine): string|nil|nil Custom buffer name format function. If provided, this function will be called for each buffer to format only the buffer name/content. The plugin handles padding, icons, and diagnostics. Should return a string for the buffer name/content, or nil to use default formatting.
 
 ---@class BafaUserConfigUi
 ---@field jump_labels BafaUserConfigUiJumpLabels|nil Jump-labels configuration
