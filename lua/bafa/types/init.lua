@@ -70,6 +70,22 @@ M.BafaConfigWindowPosition = {
   center_right = "center-right",
 }
 
+---@enum BafaDiagnosticType
+M.BafaDiagnosticType = {
+  Error = "Error",
+  Warn = "Warn",
+  Info = "Info",
+  Hint = "Hint",
+}
+
+---@class BafaUiBufferLine
+---@field number number Buffer number in Neovim
+---@field line_number number Line number in the UI
+---@field name string Buffer name, including path
+---@field is_modified boolean If true, buffer has unsaved changes
+---@field last_used string Human-readable last used time
+---@field diagnostics table<BafaDiagnosticType, number>|nil Diagnostics counts by type (e.g., { Error = 2, Warn = 1 }), nil if diagnostics are disabled
+
 ---@class BafaUiToggleOptions
 ---@field with_jump_labels boolean|nil If true, shows jump labels when opening the menu
 
@@ -117,6 +133,9 @@ M.BafaConfigWindowPosition = {
 ---@field method BafaSorting Sorting method
 ---@field focus_alternate_buffer boolean If true, cursor defaults to second buffer (second most recently used) when opening menu
 
+---@class BafaConfigUiRender
+---@field custom_format_buffer_line fun(buffer_line: BafaUiBufferLine): string|nil Custom buffer line format function. If provided, this function will be called for each buffer line. Should return a string to display, or nil to use default formatting.
+
 ---@class BafaConfigUi
 ---@field jump_labels BafaConfigUiJumpLabels Jump-labels configuration
 ---@field diagnostics boolean Show diagnostics in the UI
@@ -128,6 +147,7 @@ M.BafaConfigWindowPosition = {
 ---@field icons BafaConfigIcons Icons configuration
 ---@field hl BafaConfigHl Highlight groups configuration
 ---@field sort BafaConfigUiSort Sort configuration
+---@field render BafaConfigUiRender Render configuration
 
 ---@class BafaDefaultConfig
 ---@field log_level BafaLoggerLogLevelNames
@@ -158,6 +178,9 @@ M.BafaConfigWindowPosition = {
 ---@field method BafaSorting|nil Sorting method, defaults to BafaSorting.DEFAULT
 ---@field focus_alternate_buffer boolean|nil If true, cursor defaults to second buffer (second most recently used) when opening menu
 
+---@class BafaUserConfigUiRender
+---@field custom_format_buffer_line fun(buffer_line: BafaUiBufferLine): string|nil|nil Custom buffer line format function. If provided, this function will be called for each buffer line. Should return a string to display, or nil to use default formatting.
+
 ---@class BafaUserConfigUi
 ---@field jump_labels BafaUserConfigUiJumpLabels|nil Jump-labels configuration
 ---@field diagnostics boolean|nil Show diagnostics in the UI
@@ -169,6 +192,7 @@ M.BafaConfigWindowPosition = {
 ---@field icons BafaConfigIcons|nil Icons configuration
 ---@field hl BafaUserConfigHl|nil Highlight groups configuration
 ---@field sort BafaUserConfigUiSort|nil Sort configuration
+---@field render BafaUserConfigUiRender|nil Render configuration
 
 ---@class BafaUserConfig
 ---@field title string|nil @deprecated Use ui.title.text instead

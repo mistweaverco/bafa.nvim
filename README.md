@@ -78,7 +78,7 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 ```lua
 {
   'mistweaverco/bafa.nvim',
-  version = 'v1.9.0',
+  version = 'v1.10.0',
 },
 ```
 
@@ -89,7 +89,7 @@ See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
 ```lua
 use {
   'mistweaverco/bafa.nvim',
-  tag = 'v1.9.0',
+  tag = 'v1.10.0',
 })
 ```
 
@@ -98,7 +98,7 @@ use {
 ```lua
 vim.pack.add({
   src = 'https://github.com/mistweaverco/bafa.nvim.git',
-  version = 'v1.9.0',
+  version = 'v1.10.0',
 })
 require('bafa').setup()
 ```
@@ -119,6 +119,13 @@ return {
     provider = "vim.notify",
   },
   ui = {
+    -- 🪄 Rendering configuration
+    render = {
+      -- Custom buffer line format function, default is nil.
+      -- The function receives a BafaUiBufferLine as argument
+      -- and should return a string to be displayed in the UI.
+      custom_format_buffer_line = nil,
+    },
     -- 🧭 Buffer ordering configuration
     sort = {
       -- Buffer ordering strategy
