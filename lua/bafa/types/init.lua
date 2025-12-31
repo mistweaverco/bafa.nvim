@@ -113,6 +113,10 @@ M.BafaConfigWindowPosition = {
 ---@field text string Title text
 ---@field pos BafaConfigUiTitlePos Title position
 
+---@class BafaConfigUiSort
+---@field method BafaSorting Sorting method
+---@field focus_alternate_buffer boolean If true, cursor defaults to second buffer (second most recently used) when opening menu
+
 ---@class BafaConfigUi
 ---@field jump_labels BafaConfigUiJumpLabels Jump-labels configuration
 ---@field diagnostics boolean Show diagnostics in the UI
@@ -123,6 +127,7 @@ M.BafaConfigWindowPosition = {
 ---@field position BafaConfigUiPosition Window position configuration
 ---@field icons BafaConfigIcons Icons configuration
 ---@field hl BafaConfigHl Highlight groups configuration
+---@field sort BafaConfigUiSort Sort configuration
 
 ---@class BafaDefaultConfig
 ---@field log_level BafaLoggerLogLevelNames
@@ -149,6 +154,10 @@ M.BafaConfigWindowPosition = {
 ---@field text string|nil Title text
 ---@field pos BafaConfigUiTitlePos|nil Title position
 
+---@class BafaUserConfigUiSort
+---@field method BafaSorting|nil Sorting method, defaults to BafaSorting.DEFAULT
+---@field focus_alternate_buffer boolean|nil If true, cursor defaults to second buffer (second most recently used) when opening menu
+
 ---@class BafaUserConfigUi
 ---@field jump_labels BafaUserConfigUiJumpLabels|nil Jump-labels configuration
 ---@field diagnostics boolean|nil Show diagnostics in the UI
@@ -159,6 +168,7 @@ M.BafaConfigWindowPosition = {
 ---@field position BafaUserConfigUiPosition|nil Window position configuration
 ---@field icons BafaConfigIcons|nil Icons configuration
 ---@field hl BafaUserConfigHl|nil Highlight groups configuration
+---@field sort BafaUserConfigUiSort|nil Sort configuration
 
 ---@class BafaUserConfig
 ---@field title string|nil @deprecated Use ui.title.text instead

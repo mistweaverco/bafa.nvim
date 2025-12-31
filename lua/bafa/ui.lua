@@ -1642,13 +1642,29 @@ function M.toggle(opts)
   -- Refresh UI from state
   refresh_ui()
 
-  -- Restore cursor line position (only in manual mode, with bounds checking)
-  local working_buffers = State.get_working_buffers()
-  local max_line = #working_buffers
-  if max_line > 0 then
+  -- Set cursor line position
+  -- Priority: 1. Saved cursor line (manual mode), 2. Default based on config
+  local display_buffers = State.get_display_order()
+  local max_line = #display_buffers
+  if max_line > 0 and BAFA_WIN_ID ~= nil then
     local saved_cursor_line = State.get_persisted_cursor_line(max_line)
-    if saved_cursor_line ~= nil and BAFA_WIN_ID ~= nil then
+    if saved_cursor_line ~= nil then
+      -- Use saved cursor line (manual mode)
       vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { saved_cursor_line, 0 })
+    else
+      -- Check if focus_alternate_buffer is enabled
+      local bafa_config = Config.get()
+      local ui_config = bafa_config.ui or {}
+      local sort_config = ui_config.sort or {}
+      local focus_alternate = sort_config.focus_alternate_buffer or false
+
+      if focus_alternate and max_line >= 2 then
+        -- Default to second buffer (second most recently used) to allow quick switch back
+        vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { 2, 0 })
+      else
+        -- Default to first buffer
+        vim.api.nvim_win_set_cursor(BAFA_WIN_ID, { 1, 0 })
+      end
     end
   end
 

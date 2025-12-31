@@ -4,17 +4,7 @@ local Types = require("bafa.types")
 ---Get normalized config
 ---@param cfg BafaUserConfig
 ---@return BafaDefaultConfig
-M.get_normalized_config = function(cfg)
-  local defaults = M.config_defaults
-  for key, value in pairs(cfg) do
-    if value == nil then
-      defaults[key] = nil
-    elseif type(value) == "table" then
-      M.get_normalized_config(value)
-    end
-  end
-  return defaults
-end
+M.get_normalized_config = function(cfg) return vim.tbl_deep_extend("force", M.config_defaults, cfg or {}) end
 
 ---@type string
 M.plugin_name = "bafa.nvim"
@@ -66,11 +56,36 @@ M.config_defaults = {
         deleted = "GitSignsDelete", -- Highlight group for deleted buffer signs (fallback: DiffDelete)
       },
     },
+    sort = {
+      method = Types.BafaSorting.DEFAULT, -- Sorting method
+      focus_alternate_buffer = false, -- If true, cursor defaults to second buffer when opening menu
+    },
   },
 }
 
 ---@type BafaDefaultConfig
 M.user_config = M.config_defaults
+
+---Normalize sorting method string aliases to enum values
+---@param method string|BafaSorting|nil
+---@return BafaSorting
+local function normalize_sort_method(method)
+  if method == nil then return Types.BafaSorting.DEFAULT end
+  -- Handle string aliases
+  if type(method) == "string" then
+    if method == "auto" then return Types.BafaSorting.AUTO end
+    if method == "manual" then return Types.BafaSorting.MANUAL end
+    -- If it's already a valid enum value string, return it
+    for _, valid_sorting in pairs(Types.BafaSorting) do
+      if method == valid_sorting then return method end
+    end
+  end
+  -- If it's already an enum value, return it
+  for _, valid_sorting in pairs(Types.BafaSorting) do
+    if method == valid_sorting then return method end
+  end
+  return Types.BafaSorting.DEFAULT
+end
 
 ---Migrate deprecated config fields to new structure
 ---@param config BafaUserConfig
@@ -121,6 +136,11 @@ local function migrate_config(config)
   if migrated.hl ~= nil and (not migrated.ui or migrated.ui.hl == nil) then
     if not migrated.ui then migrated.ui = {} end
     if migrated.ui.hl == nil then migrated.ui.hl = migrated.hl end
+  end
+
+  -- Normalize sort method if present
+  if migrated.ui and migrated.ui.sort and migrated.ui.sort.method then
+    migrated.ui.sort.method = normalize_sort_method(migrated.ui.sort.method)
   end
 
   return migrated

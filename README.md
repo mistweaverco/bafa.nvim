@@ -49,7 +49,8 @@ without selecting a buffer.
 
 ## Requirements
 
-- [Neovim](https://github.com/neovim/neovim) (tested with 0.9.0)
+- [Neovim](https://github.com/neovim/neovim)
+  (tested with 0.11.5, might work with older versions as well)
 
 > [!TIP]
 > You need to install a patched nerd-font for
@@ -77,7 +78,7 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 ```lua
 {
   'mistweaverco/bafa.nvim',
-  version = 'v1.8.2',
+  version = 'v1.9.0',
 },
 ```
 
@@ -88,7 +89,7 @@ See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
 ```lua
 use {
   'mistweaverco/bafa.nvim',
-  tag = 'v1.8.2',
+  tag = 'v1.9.0',
 })
 ```
 
@@ -97,7 +98,7 @@ use {
 ```lua
 vim.pack.add({
   src = 'https://github.com/mistweaverco/bafa.nvim.git',
-  version = 'v1.8.2',
+  version = 'v1.9.0',
 })
 require('bafa').setup()
 ```
@@ -118,6 +119,19 @@ return {
     provider = "vim.notify",
   },
   ui = {
+    -- 🧭 Buffer ordering configuration
+    sort = {
+      -- Buffer ordering strategy
+      -- "default" | "last_used" | "manual"
+      -- "default": Buffers are ordered by last usage time
+      -- "last_used": Buffers are ordered by their buffer number
+      -- "manual": Buffers are ordered manually by the user
+      method = "default",
+      -- Only applicable when `method` is "default" or "last_used"
+      -- When true, instead of focusing the current buffer,
+      -- the previously used buffer will be focused when opening the UI
+      focus_alternate_buffer = false,
+    },
     -- 🦘 Jump-labels configuration
     jump_labels = {
       -- Keys to use for jump-labels
