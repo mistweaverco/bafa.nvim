@@ -2,7 +2,7 @@ local M = {}
 
 ---Get the local leader key, fallback to leader if not set
 ---@type string
-M.localleader = vim.g.maplocalleader or vim.g.mapleader
+M.localleader = vim.g.maplocalleader and vim.g.maplocalleader ~= "" and vim.g.maplocalleader or vim.g.mapleader or "\\"
 
 ---List of reserved keys that cannot be used as jump labels
 ---and will be skipped when generating jump labels

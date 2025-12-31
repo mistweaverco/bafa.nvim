@@ -8,8 +8,8 @@ local State = require("bafa.utils.state")
 local TableUtils = require("bafa.utils.table")
 local Types = require("bafa.types")
 local UiUtils = require("bafa.utils.ui")
-local _, Devicons = pcall(require, "nvim-web-devicons")
 
+---@module 'bafa.ui' UI Module for bafa.nvim
 local M = {}
 
 local BAFA_NS_ID = vim.api.nvim_create_namespace("bafa.nvim")
@@ -473,11 +473,12 @@ local function add_jump_label(idx, buffer)
 end
 
 local get_buffer_icon = function(buffer)
-  if Devicons == nil then
+  local ok, devicons = pcall(require, "nvim-web-devicons")
+  if not ok then
     return "", "Normal" -- fallback to default icon, when devicons is not available
   end
   if not buffer or not buffer.name then return "", "Normal" end
-  local icon, icon_hl = Devicons.get_icon(buffer.name, buffer.extension, { default = true })
+  local icon, icon_hl = devicons.get_icon(buffer.name, buffer.extension, { default = true })
   return icon, icon_hl
 end
 
@@ -1593,6 +1594,13 @@ function M.toggle_sorting(sorting)
   refresh_ui()
 end
 
+M.hide = function()
+  if BAFA_WIN_ID ~= nil and vim.api.nvim_win_is_valid(BAFA_WIN_ID) then
+    close_window()
+    UiUtils.revert_patches()
+  end
+end
+
 ---Toggle bafa menu
 ---@param opts BafaUiToggleOptions|nil Optional options
 ---@returns nil
@@ -1624,7 +1632,7 @@ function M.toggle(opts)
   local bafa_config = Config.get()
   local ui_config = bafa_config.ui or {}
   vim.wo[BAFA_WIN_ID].number = ui_config.line_numbers or false
-  vim.api.nvim_buf_set_name(BAFA_BUF_ID, "bafa-menu")
+  vim.api.nvim_buf_set_name(BAFA_BUF_ID, "bafa://bafa-menu")
   vim.bo[BAFA_BUF_ID].buftype = "nofile"
   vim.bo[BAFA_BUF_ID].bufhidden = "delete"
 
