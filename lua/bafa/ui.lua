@@ -618,7 +618,8 @@ local function refresh_ui()
   local max_signs_needed = 0
   local max_display_width = 0
   local line_display_widths = {}
-  local formatted_lines = {} -- Store formatted lines to avoid calling custom function twice
+  local formatted_lines = {} -- Store formatted lines (without end padding and diagnostics)
+  local buffer_name_contents = {} -- Store custom formatted buffer name contents
 
   for idx, buffer in ipairs(display_buffers) do
     -- Count signs needed for this buffer
@@ -634,10 +635,10 @@ local function refresh_ui()
     end
     -- Skip invalid buffers (shouldn't happen after filtering, but safety check)
     if buffer and buffer.number and vim.api.nvim_buf_is_valid(buffer.number) then
-      local formatted_line
-      local base_width
+      local buffer_name_content
+      local icon, _ = get_buffer_icon(buffer)
 
-      -- Use custom format function if provided
+      -- Use custom format function if provided (only formats the buffer name/content)
       if using_custom_format then
         -- Build BafaUiBufferLine object
         local buffer_line = {
@@ -650,62 +651,53 @@ local function refresh_ui()
         }
 
         -- Call custom format function
-        local success, custom_line = pcall(custom_format, buffer_line)
-        if success and custom_line and type(custom_line) == "string" then
-          -- Use custom format as-is (no automatic padding)
-          formatted_line = custom_line
+        local success, custom_content = pcall(custom_format, buffer_line)
+        if success and custom_content and type(custom_content) == "string" then
+          buffer_name_content = custom_content
         else
-          -- Fall back to default format if custom function returns nil or invalid value
-          local icon, _ = get_buffer_icon(buffer)
-          formatted_line = string.format("  %s %s  ", icon, buffer.name)
+          -- Fall back to default buffer name if custom function returns nil or invalid value
+          buffer_name_content = buffer.name
         end
       else
-        -- Default format (with end padding included in width calculation)
-        local icon, _ = get_buffer_icon(buffer)
-        formatted_line = string.format("  %s %s  ", icon, buffer.name)
+        -- Default format: just the buffer name
+        buffer_name_content = buffer.name
       end
 
-      base_width = vim.fn.strdisplaywidth(formatted_line)
+      -- Build the full line: padding + icon + space + content + diagnostics + padding
+      local formatted_line = string.format("  %s %s", icon, buffer_name_content)
       formatted_lines[idx] = formatted_line
+      buffer_name_contents[idx] = buffer_name_content -- Store for later use
 
+      local base_width = vim.fn.strdisplaywidth(formatted_line)
       local diagnostics_width = 0
-      -- Only add diagnostics width if not using custom format (custom format may include diagnostics)
-      if not using_custom_format and bafa_config.ui.diagnostics then
-        diagnostics_width = get_diagnostics_width({ buffer })
-      end
+      if bafa_config.ui.diagnostics then diagnostics_width = get_diagnostics_width({ buffer }) end
 
-      -- Total display width for this line (base + diagnostics)
-      local total_width = base_width + diagnostics_width
+      -- Total display width for this line (base + diagnostics + end padding)
+      local total_width = base_width + diagnostics_width + 2 -- +2 for end padding
       line_display_widths[idx] = total_width
       if total_width > max_display_width then max_display_width = total_width end
     end
   end
 
-  -- Second pass: pad lines to match maximum width (only if not using custom format)
+  -- Second pass: build final lines with padding and diagnostics
   for idx, buffer in ipairs(display_buffers) do
     -- Skip invalid buffers (shouldn't happen after filtering, but safety check)
     if buffer and buffer.number and vim.api.nvim_buf_is_valid(buffer.number) then
-      if using_custom_format then
-        -- Use pre-formatted line from first pass (no padding for custom format)
-        contents[idx] = formatted_lines[idx] or ""
-      else
-        -- Default format with padding (end padding already included in formatted_line)
-        local base_line = formatted_lines[idx]
-        if not base_line then
-          local icon, _ = get_buffer_icon(buffer)
-          base_line = string.format("  %s %s  ", icon, buffer.name)
-        end
-        local current_width = line_display_widths[idx] or 0
-        local padding_needed = max_display_width - current_width
+      local base_line = formatted_lines[idx]
+      if not base_line then
+        local icon, _ = get_buffer_icon(buffer)
+        local content = buffer_name_contents[idx] or buffer.name
+        base_line = string.format("  %s %s", icon, content)
+      end
 
-        -- Pad with spaces to match maximum width (end padding already in base_line)
-        if padding_needed > 0 then
-          -- Insert padding before the trailing "  "
-          local base_without_end = base_line:sub(1, -3) -- Remove trailing "  "
-          contents[idx] = base_without_end .. string.rep(" ", padding_needed) .. "  "
-        else
-          contents[idx] = base_line
-        end
+      local current_width = line_display_widths[idx] or 0
+      local padding_needed = max_display_width - current_width
+
+      -- Build final line: base_line + padding + end padding
+      if padding_needed > 0 then
+        contents[idx] = base_line .. string.rep(" ", padding_needed) .. "  "
+      else
+        contents[idx] = base_line .. "  "
       end
     end
   end
@@ -748,14 +740,14 @@ local function refresh_ui()
       -- Update the cached is_modified state from the actual buffer
       local success, is_modified = pcall(function() return vim.bo[buffer.number].modified end)
       if success then buffer.is_modified = is_modified end
-      -- add highlights (only if not using custom format)
-      if not using_custom_format then add_ft_icon_highlight(idx, buffer) end
+      -- add highlights (icon highlight always applied)
+      add_ft_icon_highlight(idx, buffer)
       -- add signs (gitsigns-like UX)
       update_buffer_sign(idx, buffer)
       -- add jump labels
       add_jump_label(idx, buffer)
-      -- add diagnostics (only if not using custom format)
-      if not using_custom_format and bafa_config.ui.diagnostics then add_diagnostics_icons(idx, buffer) end
+      -- add diagnostics (always applied if enabled)
+      if bafa_config.ui.diagnostics then add_diagnostics_icons(idx, buffer) end
       -- Visual selection highlighting is handled by Neovim's built-in visual mode
     end
   end
