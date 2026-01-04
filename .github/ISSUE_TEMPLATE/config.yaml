@@ -1,0 +1,12 @@
+---
+blank_issues_enabled: true
+contact_links:
+  - name: Discord server
+    about: Join our Discord server for support and discussion.
+    url: https://mistweaverco.com/discord
+  - name: Roadmap
+    about: View the project roadmap and upcoming features.
+    url: https://mistweaverco.com/roadmap?filter=bafa.nvim
+  - name: Website
+    about: Visit the official website for more information.
+    url: https://bafa.nvim.forthelazy.dev
