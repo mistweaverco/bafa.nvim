@@ -1700,6 +1700,7 @@ function M.toggle(opts)
   local ui_config = bafa_config.ui or {}
   vim.wo[BAFA_WIN_ID].number = ui_config.line_numbers or false
   vim.api.nvim_buf_set_name(BAFA_BUF_ID, "bafa://bafa-menu")
+  vim.bo[BAFA_BUF_ID].filetype = Config.ui_buffer_ft
   vim.bo[BAFA_BUF_ID].buftype = "nofile"
   vim.bo[BAFA_BUF_ID].bufhidden = "delete"
 
