@@ -9,6 +9,9 @@ M.get_normalized_config = function(cfg) return vim.tbl_deep_extend("force", M.co
 ---@type string
 M.plugin_name = "bafa.nvim"
 
+---@type string
+M.ui_buffer_ft = "bafa"
+
 ---@type BafaDefaultConfig
 M.config_defaults = {
   log_level = Types.BafaLoggerLogLevelNames.error,
