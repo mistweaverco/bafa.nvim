@@ -18,6 +18,9 @@ local state = {
   display_order = {}, -- Display order including both working and deleted buffers (for UI)
   history = {}, -- History for undo/redo
   history_index = 0, -- Current position in history
+  -- Volatile (in-memory) persistence used when kikao.nvim is not available.
+  -- Stores buffer paths in the same shape that kikao would.
+  persisted_order_paths = {},
 }
 
 ---Returns a valid sorting string
@@ -68,7 +71,16 @@ local function get_persisted_data(sorting)
   -- check if plugin kikao.nvim is installed
   -- and if so, get the persisted order from its storage
   local kikao_ok, kikao_api = pcall(require, "kikao.api")
-  if not kikao_ok then return { buffers = {}, sorting = get_valid_sorting(sorting) } end
+  if not kikao_ok then
+    -- Fall back to volatile (in-memory) persistence.
+    -- Use current in-memory sorting if available, otherwise the provided one.
+    local effective_sorting = sorting or state.sorting
+    effective_sorting = get_valid_sorting(effective_sorting)
+    return {
+      buffers = state.persisted_order_paths or {},
+      sorting = effective_sorting,
+    }
+  end
   ---@type BafaBuffer[]|nil
   local ordered_buffers = kikao_api.get_value({ key = "plugins.bafa.buffers" }) or {}
   ---@type BafaSorting
@@ -557,6 +569,9 @@ function M.save_order()
       if should_save then table.insert(ordererd_buffers, buf.path) end
     end
   end
+  -- Always keep a volatile copy in memory so that order persists
+  -- for the lifetime of the Neovim session even without kikao.nvim.
+  state.persisted_order_paths = ordererd_buffers
   -- check if plugin kikao.nvim is installed
   -- and if so, save the persisted order to its storage
   local kikao_ok, kikao_api = pcall(require, "kikao.api")
@@ -578,6 +593,9 @@ function M.get_persisted_sorting()
   local kikao_ok, kikao_api = pcall(require, "kikao.api")
   if not kikao_ok then
     Logger.warn("kikao.nvim not found, returning from volatile state (in-memory) or DEFAULT", "See: " .. KIKAO_URL)
+    -- When kikao.nvim is not available, rely on in-memory state
+    -- so sorting mode persists for the duration of the Neovim session.
+    if state.sorting ~= nil then return get_valid_sorting(state.sorting) end
     return Types.BafaSorting.DEFAULT
   end
   local sorting = kikao_api.get_value({ key = "plugins.bafa.sorting" })
