@@ -511,12 +511,16 @@ local add_ft_icon_highlight = function(idx, buffer)
   if BAFA_BUF_ID == nil then return end
   if not buffer or not buffer.number or not vim.api.nvim_buf_is_valid(buffer.number) then return end
   local _, icon_hl_group = get_buffer_icon(buffer)
-  local icon_hl = vim.api.nvim_get_hl(0, { name = icon_hl_group }).fg
-  local hl_group = "BafaIcon" .. tostring(idx)
-  vim.api.nvim_set_hl(0, hl_group, { fg = string.format("#%06x", icon_hl) })
+  if not icon_hl_group or icon_hl_group == "" then return end
+
+  -- Validate that the highlight group exists; devicons (or mocks) can return
+  -- groups that are links or groups without an explicit `fg`.
+  local ok = pcall(vim.api.nvim_get_hl, 0, { name = icon_hl_group })
+  if not ok then return end
+
   vim.api.nvim_buf_set_extmark(BAFA_BUF_ID, BAFA_NS_ID, idx - 1, 2, {
     end_col = 3,
-    hl_group = hl_group,
+    hl_group = icon_hl_group,
     hl_mode = "combine", -- Combine with visual selection instead of replacing it
   })
 end
