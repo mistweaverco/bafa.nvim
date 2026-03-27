@@ -1,0 +1,10 @@
+WRN 2026-03-27T15:19:02.283 ?.123335   server_start:199: Failed to start server: permission denied: /run/user/1000/
+WRN 2026-03-27T15:19:02.295 ?.123337   server_start:199: Failed to start server: permission denied: /run/user/1000/
+WRN 2026-03-27T15:19:16.053 ?.123455   server_start:199: Failed to start server: permission denied: /run/user/1000/
+WRN 2026-03-27T15:19:16.061 ?.123457   server_start:199: Failed to start server: permission denied: /run/user/1000/
+WRN 2026-03-27T15:20:06.846 ?.123913   server_start:199: Failed to start server: permission denied: /run/user/1000/
+WRN 2026-03-27T15:20:06.856 ?.123915   server_start:199: Failed to start server: permission denied: /run/user/1000/
+WRN 2026-03-27T15:21:49.145 ?.124426   server_start:199: Failed to start server: permission denied: /run/user/1000/
+WRN 2026-03-27T15:21:49.153 ?.124428   server_start:199: Failed to start server: permission denied: /run/user/1000/
+WRN 2026-03-27T15:22:40.478 ?.124705   server_start:199: Failed to start server: permission denied: /run/user/1000/
+WRN 2026-03-27T15:22:40.489 ?.124707   server_start:199: Failed to start server: permission denied: /run/user/1000/
