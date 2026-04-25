@@ -78,7 +78,7 @@ See: [lazy.nvim](https://github.com/folke/lazy.nvim)
 ```lua
 {
   'mistweaverco/bafa.nvim',
-  version = 'v1.11.2',
+  version = 'v1.12.0',
 },
 ```
 
@@ -89,7 +89,7 @@ See: [packer.nvim](https://github.com/wbthomason/packer.nvim)
 ```lua
 use {
   'mistweaverco/bafa.nvim',
-  tag = 'v1.11.2',
+  tag = 'v1.12.0',
 })
 ```
 
@@ -98,7 +98,7 @@ use {
 ```lua
 vim.pack.add({
   src = 'https://github.com/mistweaverco/bafa.nvim.git',
-  version = 'v1.11.2',
+  version = 'v1.12.0',
 })
 require('bafa').setup()
 ```
@@ -237,6 +237,18 @@ require('bafa').toggle({
     with_jump_labels = true,
 })
 ```
+
+### Programmatic buffer switching (API)
+
+If you want to switch buffers without opening the UI (for example, to get a more reliable “alternate buffer” than Neovim’s built-in behavior when buffers were deleted), you can use:
+
+```lua
+require("bafa.api").switch_to_buffer(index)
+```
+
+- **index**: 1-based index as it would be shown in the bafa UI.
+- **ordering**: matches the UI ordering (by default: most recently used first).
+- **invalid/deleted buffers**: skipped, so indices map to what the UI would actually display.
 
 ### Switching to a buffer
 
