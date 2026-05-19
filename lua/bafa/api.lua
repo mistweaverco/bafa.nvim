@@ -5,9 +5,6 @@ local Types = require("bafa.types")
 ---@module 'bafa.api'
 local M = {}
 
----@type number|nil
-local last_bufnr = nil
-
 ---Return the list of buffers in the same order bafa would display.
 ---For AUTO/DEFAULT sorting (`last_used`), this recomputes from current buffers
 ---so indices track MRU changes (and `switch_to_buffer(2)` can act as a toggle).
@@ -46,25 +43,11 @@ end
 function M.switch_to_buffer(index)
   if type(index) ~= "number" or index < 1 then return false end
 
-  local current = vim.api.nvim_get_current_buf()
-
-  -- Special-case index 2 as a stable "toggle" between the last two buffers.
-  -- This avoids relying on coarse `lastused` timestamps (can tie within 1s).
-  if index == 2 and last_bufnr and last_bufnr ~= current and vim.api.nvim_buf_is_valid(last_bufnr) then
-    local ok = pcall(vim.api.nvim_set_current_buf, last_bufnr)
-    if ok == true then
-      last_bufnr = current
-      return true
-    end
-    -- Fall back to computed display order if direct switch failed.
-  end
-
   local buffers = get_display_buffers()
   local target = buffers[index]
   if not target or not target.number or not vim.api.nvim_buf_is_valid(target.number) then return false end
 
   local ok = pcall(vim.api.nvim_set_current_buf, target.number)
-  if ok == true then last_bufnr = current end
   return ok == true
 end
 
